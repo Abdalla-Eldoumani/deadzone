@@ -2,7 +2,6 @@
     @Author - Abdalla Eldoumani
     * Program entry point for DEADZONE terminal survivor
     * Initializes terminal, runs main game loop, handles cleanup
-    * Phase 1: Foundation - demonstrates terminal, input, timing
 */
 
 // ============== INCLUDE ALL MODULES VIA M4 ==============
