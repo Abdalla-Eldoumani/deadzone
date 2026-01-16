@@ -4,4 +4,4 @@ src/*.s
 src/*.o
 
 # Save files
-data/
+# data/
