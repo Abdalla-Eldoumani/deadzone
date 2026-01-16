@@ -1,0 +1,7 @@
+# Build artifacts
+deadzone
+src/*.s
+src/*.o
+
+# Save files
+data/*.sav
