@@ -19,6 +19,7 @@ STDOUT = 1                                      // Standard output
 STDERR = 2                                      // Standard error
 
 // ============== LINUX SYSCALL NUMBERS (AArch64) ==============
+SYS_FCNTL = 25                                  // fcntl(fd, cmd, arg)
 SYS_IOCTL = 29                                  // ioctl(fd, request, arg)
 SYS_OPENAT = 56                                 // openat(dirfd, path, flags, mode)
 SYS_CLOSE = 57                                  // close(fd)
@@ -56,6 +57,11 @@ IEXTEN = 0x8000                                 // Extended input processing
 // Input flags (c_iflag)
 ICRNL = 0x0100                                  // Map CR to NL
 IXON = 0x0400                                   // Enable XON/XOFF flow control
+
+// ============== FCNTL COMMANDS AND FILE STATUS FLAGS ==============
+F_GETFL = 3                                     // Read the file status flags
+F_SETFL = 4                                     // Write the file status flags
+O_NONBLOCK = 0x800                              // Reads return instead of waiting
 
 // ============== KEY CODES ==============
 KEY_NONE = -1                                   // No key pressed
