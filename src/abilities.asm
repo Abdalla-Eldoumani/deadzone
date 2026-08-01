@@ -1,15 +1,7 @@
-/* abilities.asm - Special Abilities System
-    @Author - Abdalla Eldoumani
-    * Manages special abilities with cooldowns
-    * Abilities:
-    *   - Screen Clear Bomb (Spacebar): Kill all enemies, massive explosion
-    *   - Freeze (F key): Freeze all enemies for 3 seconds
-    * Functions: abilities_init, abilities_update, abilities_use_bomb,
-    *            abilities_use_freeze, abilities_draw_hud
-    * NOTE: This file is included by main.asm via m4
-*/
+// The two special abilities: the bomb that clears the screen and the freeze
+// that stops every enemy, both on cooldowns counted in frames.
 
-// ============== ABILITY CONSTANTS ==============
+// Ability constants
 ABILITY_BOMB = 1                                // Screen clear bomb
 ABILITY_FREEZE = 2                              // Freeze enemies
 
@@ -23,7 +15,6 @@ FREEZE_DURATION = 3 * TARGET_FPS                // 3 seconds
 KEY_BOMB = ' '                                  // Spacebar
 KEY_FREEZE = 'f'                                // F key
 
-// ============== DATA SECTION ==============
                 .data
                 .balign 4
 
@@ -35,24 +26,18 @@ freeze_cooldown: .word  0                       // Frames until freeze ready
 freeze_active:  .word   0                       // Is freeze active (1/0)
 freeze_timer:   .word   0                       // Frames remaining in freeze
 
-// ============== TEXT SECTION ==============
                 .text
 
 // Strings for HUD display
                 .balign 4
 ability_hud_fmt: .string "[SPACE]"
-ability_hud_bomb: .string "BOMB"
 ability_hud_ready: .string "READY"
 ability_hud_freeze_key: .string "[F]"
-ability_hud_freeze: .string "FREEZE"
 ability_hud_active: .string "ACTIVE!"
-ability_cooldown_fmt: .string "%ds"
 
                 .balign 4
 
-// ============================================================================
 // abilities_init - Initialize ability system
-// ============================================================================
                 .global abilities_init
 abilities_init:
                 stp     fp, lr, [sp, -16]!
@@ -80,10 +65,8 @@ abilities_init:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // abilities_update - Update cooldowns and freeze state
 // Called every frame
-// ============================================================================
                 .global abilities_update
 abilities_update:
                 stp     fp, lr, [sp, -16]!
@@ -133,17 +116,15 @@ abilities_update_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // abilities_check_input - Check for ability key presses
 // Parameters: w0 = key pressed
-// ============================================================================
                 .global abilities_check_input
 abilities_check_input:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
                 str     x19, [sp, 16]
 
-                mov     w19, w0                 // Save key
+                mov     w19, w0
 
                 // Check for bomb (spacebar)
                 cmp     w19, KEY_BOMB
@@ -162,10 +143,8 @@ abilities_input_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // abilities_use_bomb - Activate screen clear bomb
 // Kills all enemies on screen with massive explosion
-// ============================================================================
                 .global abilities_use_bomb
 abilities_use_bomb:
                 stp     fp, lr, [sp, -64]!
@@ -188,7 +167,7 @@ abilities_use_bomb:
                 adrp    x19, enemy_pool
                 add     x19, x19, :lo12:enemy_pool
                 mov     w20, MAX_ENEMIES
-                mov     w21, 0                  // Kill count
+                mov     w21, 0
 
 bomb_kill_loop:
                 cbz     w20, bomb_kill_done
@@ -256,10 +235,8 @@ bomb_not_ready:
                 ldp     fp, lr, [sp], 64
                 ret
 
-// ============================================================================
 // abilities_use_freeze - Activate freeze ability
 // Freezes all enemies for FREEZE_DURATION frames
-// ============================================================================
                 .global abilities_use_freeze
 abilities_use_freeze:
                 stp     fp, lr, [sp, -16]!
@@ -300,10 +277,8 @@ freeze_not_ready:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // abilities_is_frozen - Check if freeze is active
 // Returns: w0 = 1 if frozen, 0 if not
-// ============================================================================
                 .global abilities_is_frozen
 abilities_is_frozen:
                 adrp    x0, freeze_active
@@ -311,10 +286,8 @@ abilities_is_frozen:
                 ldr     w0, [x0]
                 ret
 
-// ============================================================================
 // abilities_draw_hud - Draw ability status on HUD
 // Shows cooldown status for bomb and freeze
-// ============================================================================
                 .global abilities_draw_hud
 abilities_draw_hud:
                 stp     fp, lr, [sp, -48]!
