@@ -29,7 +29,10 @@ MAX_DAMAGE_NUMS = 20                            // Maximum damage numbers
 
 // ============== PARTICLE CHARACTERS ==============
 // Characters used for explosion effects
-PARTICLE_CHARS: .byte '*', '.', '+', 'o', 'x', '\'', '`', ','
+// The quote and backtick are written numerically: m4 treats a backtick
+// as a quote opener and silently swallows the region, so the character
+// forms never survive the build.
+PARTICLE_CHARS: .byte '*', '.', '+', 'o', 'x', 0x27, 0x60, ','
 
 // ============== PARTICLE LIFE/TIMING ==============
 PARTICLE_MAX_LIFE = 12                          // Frames particle lives
@@ -572,7 +575,8 @@ spawn_explosion_done:
                 .data
 velocity_table_x: .byte  0,  1,  1,  1,  0, -1, -1, -1
 velocity_table_y: .byte -1, -1,  0,  1,  1,  1,  0, -1
-particle_chars_data: .byte '*', '.', '+', 'o', 'x', '\'', '`', ','
+// Quote and backtick numeric for the same m4 reason as PARTICLE_CHARS.
+particle_chars_data: .byte '*', '.', '+', 'o', 'x', 0x27, 0x60, ','
 
                 .text
                 .balign 4
