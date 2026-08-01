@@ -17,8 +17,8 @@ positional in GAS: a use above the definition does not resolve.
 
 | File | Purpose |
 |------|---------|
-| `constants.asm` | Every shared equate: geometry, syscalls, termios, keys, colours, timing, states, pool sizes |
-| `terminal.asm` | Raw mode, the frame buffer, and the flush that writes it |
+| `constants.asm` | Every shared equate: geometry, the play screen's row map and colour roles, syscalls, termios, keys, colours, timing, states, pool sizes |
+| `terminal.asm` | Raw mode, the frame buffer, the flush that writes it, and the row / panel / meter primitives every screen draws with |
 | `input.asm` | One non-blocking byte a frame, plus arrow-key escape decoding |
 | `player.asm` | Player struct, bounded movement, damage and invincibility, XP |
 | `enemies.asm` | Enemy pool, edge spawning, chase AI, waves, and the RNG |
@@ -27,7 +27,7 @@ positional in GAS: a use above the definition does not resolve.
 | `file_io.asm` | The save file and the whole achievement system |
 | `effects.asm` | Particles, damage numbers, screen shake |
 | `boss.asm` | The Titan: AI, phases, sprite, health bar, minions |
-| `abilities.asm` | Bomb and freeze, their cooldowns and their HUD row |
+| `abilities.asm` | Bomb and freeze, their cooldowns and their charge gauges on the status bar |
 | `main.asm` | Entry point, state machine, input handling, all screen drawing |
 
 There are no module-private sections. Pools are plain `.data` labels and
@@ -75,20 +75,58 @@ A frame in which nothing moved emits nothing at all.
 
 `screen_invalidate` zeroes `pv_*` so the next flush repaints every cell. State
 changes call it: entering and leaving play, the pause overlay, the level-up
-menu, and the boss arriving.
+menu, and the boss arriving. Overlays drawn inside a live state do not, because
+the diff already handles them.
 
-Two consequences worth knowing:
+A run only skips its cursor address while it stays inside one row. Carrying
+the cursor across a row boundary would be assuming the terminal wrapped at
+column 80, which only an exactly-80-column terminal does; anywhere wider the
+rest of the run prints on the same line, shifted right, and the frame comes
+apart. Every new row therefore starts with an address of its own. Because a
+group is eight cells and `SCREEN_WIDTH` is a multiple of eight, a row can only
+end on the last cell of a group, so seven cells in eight get away with a single
+compare.
 
-- Whole rows are laid down by `fb_fill_row`, which fills eight cells per store.
-  The borders and the empty field cost a few hundred steps a frame instead of
-  the twelve hundred single-character writes the old path used.
+Three more consequences worth knowing:
+
+- Whole rows are laid down by `fb_fill_row`, or by `fb_fill_row_pattern` for
+  the textured floor, which fill eight cells per store. The chrome and the
+  empty field cost a few hundred steps a frame instead of the twelve hundred
+  single-character writes the old path used.
+- Overlays are drawn with `fb_panel`, which blanks its interior as well as
+  drawing its frame, so a box put over the field hides what is under it. The
+  pause banner, the level-up choice and the wave announcement all use it, and
+  none of them needs the screen invalidated when it goes away: the next frame
+  simply stages the floor back.
 - The bell and the messages printed after the game gives the terminal back
   bypass the buffer through `term_write_raw` / `write_str_raw`, because they
   are not cells.
 
-The screen is a fixed 80x24: row 0 title, row 1 top rule, rows 2-17 the play
-field, row 18 bottom rule, rows 20 and 21 cleared each frame, row 22 the status
-bar, row 23 the abilities HUD.
+## Play screen layout
+
+The screen is a fixed 80x24 and the row map lives in `constants.asm`:
+
+```
+row 0       marquee, the game's name on a dim band
+row 1       top rule of the arena
+rows 2-17   the arena: dim rubble, a wall at each end
+row 18      bottom rule of the arena
+row 19      gap
+row 20      status bar upper rule
+row 21      health gauge, then WAVE / KILLS / LEVEL as bold counters
+row 22      the bomb and freeze charge gauges
+row 23      status bar lower rule
+```
+
+Everything structural is dim grey, so the enemies, the player and the gauges
+are the only bright things in the frame. `constants.asm` names the roles --
+`CHROME_COLOR`, `FLOOR_COLOR`, `LABEL_COLOR`, `VALUE_COLOR` -- rather than
+repeating colour numbers at each call site. A cell carries one SGR code, so
+the bar is a band bracketed by two rules rather than a filled background.
+
+Gauges are all `fb_meter`: a bracketed run of filled and empty segments. The
+health bar runs green to amber to red as it drains; an ability gauge fills back
+up as its cooldown runs down, green when it is ready.
 
 ## Entities
 
