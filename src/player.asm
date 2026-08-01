@@ -1,12 +1,7 @@
-/* player.asm - Player State and Movement
-    @Author - Abdalla Eldoumani
-    * Manages player state, movement, and rendering
-    * Uses a proper Player struct in memory
-    * Functions: player_init, player_update, player_draw, player_move
-    * NOTE: This file is included by main.asm via m4
-*/
+// The player: position and bounded movement, health with invincibility
+// frames after a hit, experience and levelling, and the glyph on screen.
 
-// ============== PLAYER STRUCTURE OFFSETS ==============
+// Player structure offsets
 PLAYER_X = 0                                    // X position (2 bytes, signed)
 PLAYER_Y = 2                                    // Y position (2 bytes, signed)
 PLAYER_HEALTH = 4                               // Current health (1 byte)
@@ -18,18 +13,17 @@ PLAYER_IFRAMES = 15                             // Invincibility frames (1 byte)
 PLAYER_KILLS = 16                               // Kill count (4 bytes)
 PLAYER_STRUCT_SIZE = 24                         // Total struct size (padded)
 
-// ============== PLAYER CONSTANTS ==============
+// Player constants
 PLAYER_DEFAULT_HP = 100                         // Starting health
 PLAYER_DEFAULT_SPEED = 1                        // Starting speed
 PLAYER_CHAR = '@'                               // Player character
 
-// ============== PLAY AREA BOUNDS ==============
+// Play area bounds
 PLAY_LEFT = 1                                   // Left boundary (after border)
 PLAY_RIGHT = SCREEN_WIDTH - 2                   // Right boundary (before border)
 PLAY_TOP = 2                                    // Top boundary (after title and top border)
 PLAY_BOTTOM = SCREEN_HEIGHT - 7                 // Bottom boundary (before bottom border)
 
-// ============== DATA SECTION ==============
                 .data
 
 // Player data structure (24 bytes)
@@ -49,17 +43,14 @@ player_data:
 // Level up pending flag (checked by main loop)
 level_up_pending: .word  0                      // 1 if level up needs handling
 
-// ============== TEXT SECTION ==============
                 .text
                 .balign 4
 
-// ============================================================================
 // player_init - Initialize player state
 // Sets starting position, health, and stats
-// ============================================================================
                 .global player_init
 player_init:
-                stp     fp, lr, [sp, -16]!      // Save registers
+                stp     fp, lr, [sp, -16]!
                 mov     fp, sp                  // Establish frame
 
                 // Get player data address
@@ -90,13 +81,11 @@ player_init:
                 strb    w1, [x0, PLAYER_IFRAMES]
                 str     w1, [x0, PLAYER_KILLS]
 
-                ldp     fp, lr, [sp], 16        // Restore and return
+                ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // player_get_x - Get player X position
 // Returns: w0 = X position
-// ============================================================================
                 .global player_get_x
 player_get_x:
                 adrp    x0, player_data
@@ -104,10 +93,8 @@ player_get_x:
                 ldrsh   w0, [x0, PLAYER_X]      // Load signed halfword
                 ret
 
-// ============================================================================
 // player_get_y - Get player Y position
 // Returns: w0 = Y position
-// ============================================================================
                 .global player_get_y
 player_get_y:
                 adrp    x0, player_data
@@ -115,10 +102,8 @@ player_get_y:
                 ldrsh   w0, [x0, PLAYER_Y]      // Load signed halfword
                 ret
 
-// ============================================================================
 // player_get_health - Get player current health
 // Returns: w0 = health
-// ============================================================================
                 .global player_get_health
 player_get_health:
                 adrp    x0, player_data
@@ -126,10 +111,8 @@ player_get_health:
                 ldrb    w0, [x0, PLAYER_HEALTH]
                 ret
 
-// ============================================================================
 // player_get_level - Get player level
 // Returns: w0 = level
-// ============================================================================
                 .global player_get_level
 player_get_level:
                 adrp    x0, player_data
@@ -137,10 +120,8 @@ player_get_level:
                 ldrh    w0, [x0, PLAYER_LEVEL]
                 ret
 
-// ============================================================================
 // player_get_xp - Get player XP
 // Returns: w0 = XP
-// ============================================================================
                 .global player_get_xp
 player_get_xp:
                 adrp    x0, player_data
@@ -148,10 +129,8 @@ player_get_xp:
                 ldr     w0, [x0, PLAYER_XP]
                 ret
 
-// ============================================================================
 // player_get_kills - Get player kill count
 // Returns: w0 = kills
-// ============================================================================
                 .global player_get_kills
 player_get_kills:
                 adrp    x0, player_data
@@ -159,16 +138,14 @@ player_get_kills:
                 ldr     w0, [x0, PLAYER_KILLS]
                 ret
 
-// ============================================================================
 // player_move - Move player in direction
 // Parameters: w0 = dx (-1, 0, or 1), w1 = dy (-1, 0, or 1)
 // Returns: w0 = 1 if moved, 0 if blocked
-// ============================================================================
                 .global player_move
 player_move:
-                stp     fp, lr, [sp, -32]!      // Save registers
+                stp     fp, lr, [sp, -32]!
                 mov     fp, sp
-                stp     x19, x20, [sp, 16]      // Save callee-saved
+                stp     x19, x20, [sp, 16]
 
                 mov     w19, w0                 // Save dx
                 mov     w20, w1                 // Save dy
@@ -201,7 +178,7 @@ player_move:
                 strh    w1, [x0, PLAYER_X]
                 strh    w2, [x0, PLAYER_Y]
 
-                mov     w0, 1                   // Return success
+                mov     w0, 1
                 b       player_move_done
 
 player_move_blocked:
@@ -212,11 +189,9 @@ player_move_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // player_damage - Apply damage to player
 // Parameters: w0 = damage amount
 // Returns: w0 = 1 if dead, 0 if alive
-// ============================================================================
                 .global player_damage
 player_damage:
                 stp     fp, lr, [sp, -16]!
@@ -269,11 +244,9 @@ player_damage_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // player_add_xp - Add XP to player
 // Parameters: w0 = XP amount
 // Returns: w0 = 1 if leveled up, 0 otherwise
-// ============================================================================
                 .global player_add_xp
 player_add_xp:
                 stp     fp, lr, [sp, -16]!
@@ -327,9 +300,7 @@ player_xp_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // player_add_kill - Increment kill counter
-// ============================================================================
                 .global player_add_kill
 player_add_kill:
                 adrp    x0, player_data
@@ -339,10 +310,8 @@ player_add_kill:
                 str     w1, [x0, PLAYER_KILLS]
                 ret
 
-// ============================================================================
 // player_update - Update player state each frame
 // Handles invincibility countdown
-// ============================================================================
                 .global player_update
 player_update:
                 stp     fp, lr, [sp, -16]!
@@ -362,9 +331,7 @@ player_update_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // player_draw - Draw player at current position
-// ============================================================================
                 .global player_draw
 player_draw:
                 stp     fp, lr, [sp, -32]!
@@ -407,10 +374,8 @@ player_draw_color:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // player_is_alive - Check if player is alive
 // Returns: w0 = 1 if alive, 0 if dead
-// ============================================================================
                 .global player_is_alive
 player_is_alive:
                 adrp    x0, player_data
@@ -420,10 +385,8 @@ player_is_alive:
                 cset    w0, gt                  // w0 = 1 if health > 0
                 ret
 
-// ============================================================================
 // player_check_levelup - Check if level up is pending and clear flag
 // Returns: w0 = 1 if level up pending, 0 otherwise
-// ============================================================================
                 .global player_check_levelup
 player_check_levelup:
                 adrp    x0, level_up_pending
