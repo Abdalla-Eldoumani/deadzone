@@ -1,12 +1,7 @@
-/* projectiles.asm - Projectile System
-    @Author - Abdalla Eldoumani
-    * Manages projectile pool, auto-firing, and collision
-    * Projectiles auto-fire toward nearest enemy
-    * Functions: projectiles_init, projectiles_update, projectiles_draw
-    * NOTE: This file is included by main.asm via m4
-*/
+// Projectiles: the auto-fire that picks the nearest enemy, projectile
+// movement and lifetime, and the collision pass that damages boss or enemy.
 
-// ============== PROJECTILE STRUCTURE OFFSETS ==============
+// Projectile structure offsets
 PROJ_ACTIVE = 0                                 // Active flag (1 byte)
 PROJ_X = 2                                      // X position (2 bytes, signed)
 PROJ_Y = 4                                      // Y position (2 bytes, signed)
@@ -19,12 +14,12 @@ PROJ_TYPE = 13                                  // Projectile type (1 byte)
 PROJ_PADDING = 14                               // Padding (2 bytes)
 PROJ_STRUCT_SIZE = 16                           // Total struct size
 
-// ============== PROJECTILE TYPES ==============
+// Projectile types
 PROJ_TYPE_BULLET = 1                            // Basic bullet
 PROJ_TYPE_ARROW = 2                             // Arrow (piercing)
 PROJ_TYPE_MAGIC = 3                             // Magic bolt (area)
 
-// ============== PROJECTILE STATS ==============
+// Projectile stats
 BULLET_DAMAGE = 1                               // Damage per hit
 BULLET_SPEED = 2                                // Move every 2 frames (fast)
 BULLET_CHAR = '-'                               // Horizontal bullet
@@ -32,11 +27,10 @@ BULLET_CHAR_V = '|'                             // Vertical bullet
 BULLET_CHAR_D = '\\'                            // Diagonal bullet
 BULLET_CHAR_D2 = '/'                            // Other diagonal
 
-// ============== WEAPON SETTINGS ==============
+// Weapon settings
 FIRE_RATE = 10                                  // Frames between shots
 MAX_PROJECTILES = 50                            // Maximum projectiles
 
-// ============== DATA SECTION ==============
                 .data
 
 // Projectile pool
@@ -47,13 +41,10 @@ projectile_pool: .skip  MAX_PROJECTILES * PROJ_STRUCT_SIZE
 fire_timer:     .word   0                       // Frames until next shot
 proj_count:     .word   0                       // Active projectile count
 
-// ============== TEXT SECTION ==============
                 .text
                 .balign 4
 
-// ============================================================================
 // projectiles_init - Initialize projectile system
-// ============================================================================
                 .global projectiles_init
 projectiles_init:
                 stp     fp, lr, [sp, -16]!
@@ -85,10 +76,8 @@ proj_init_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // projectiles_find_slot - Find empty slot in projectile pool
 // Returns: x0 = pointer to slot, or 0 if full
-// ============================================================================
 projectiles_find_slot:
                 adrp    x0, projectile_pool
                 add     x0, x0, :lo12:projectile_pool
@@ -107,11 +96,9 @@ find_proj_slot_full:
 find_proj_slot_found:
                 ret
 
-// ============================================================================
 // projectiles_fire - Fire a projectile from player toward target
 // Parameters: w0 = target_x, w1 = target_y
 // Returns: w0 = 1 if fired, 0 if failed
-// ============================================================================
                 .global projectiles_fire
 projectiles_fire:
                 stp     fp, lr, [sp, -48]!
@@ -125,11 +112,11 @@ projectiles_fire:
                 // Find empty slot
                 bl      projectiles_find_slot
                 cbz     x0, proj_fire_fail
-                mov     x19, x0                 // Save slot pointer
+                mov     x19, x0
 
                 // Get player position
                 bl      player_get_x
-                mov     w20, w0                 // Player X
+                mov     w20, w0
                 bl      player_get_y
 
                 // Store player position as projectile start
@@ -200,7 +187,7 @@ proj_store_dy:
                 add     w1, w1, 1
                 str     w1, [x0]
 
-                mov     w0, 1                   // Return success
+                mov     w0, 1
                 b       proj_fire_done
 
 proj_fire_fail_cleanup:
@@ -208,7 +195,7 @@ proj_fire_fail_cleanup:
                 strb    w0, [x19, PROJ_ACTIVE]
 
 proj_fire_fail:
-                mov     w0, 0                   // Return failure
+                mov     w0, 0
 
 proj_fire_done:
                 ldp     x21, x22, [sp, 32]
@@ -216,10 +203,8 @@ proj_fire_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // find_nearest_enemy - Find the nearest active enemy to player
 // Returns: w0 = enemy X, w1 = enemy Y, w2 = 1 if found, 0 if none
-// ============================================================================
                 .global find_nearest_enemy
 find_nearest_enemy:
                 stp     fp, lr, [sp, -64]!
@@ -230,9 +215,9 @@ find_nearest_enemy:
 
                 // Get player position
                 bl      player_get_x
-                mov     w19, w0                 // Player X
+                mov     w19, w0
                 bl      player_get_y
-                mov     w20, w0                 // Player Y
+                mov     w20, w0
 
                 // Initialize search
                 mov     w21, 0x7FFF             // Best distance (max)
@@ -295,9 +280,7 @@ find_enemy_done:
                 ldp     fp, lr, [sp], 64
                 ret
 
-// ============================================================================
 // projectiles_update - Update all projectiles and auto-fire
-// ============================================================================
                 .global projectiles_update
 projectiles_update:
                 stp     fp, lr, [sp, -80]!
@@ -362,8 +345,8 @@ proj_check_collision:
                 // Get projectile position
                 ldrsh   w0, [x19, PROJ_X]
                 ldrsh   w1, [x19, PROJ_Y]
-                mov     w23, w0                 // Save hit X for effects
-                mov     w24, w1                 // Save hit Y for effects
+                mov     w23, w0
+                mov     w24, w1
 
                 // Check collision with boss first
                 bl      boss_check_collision
@@ -373,21 +356,21 @@ proj_check_collision:
                 ldrb    w22, [x19, PROJ_DAMAGE] // Get projectile damage
 
                 // Spawn floating damage number
-                mov     w0, w23                 // Hit X
-                mov     w1, w24                 // Hit Y
+                mov     w0, w23
+                mov     w1, w24
                 mov     w2, w22                 // Damage value
                 bl      effects_spawn_damage_num
 
                 // Damage the boss
-                mov     w0, w22                 // Damage amount
+                mov     w0, w22
                 bl      boss_damage
 
                 // Check if boss died (returns XP if dead)
                 cbz     w0, proj_deactivate     // Boss alive, just deactivate projectile
 
                 // Boss died! Spawn big explosion
-                mov     w0, w23                 // Hit X
-                mov     w1, w24                 // Hit Y
+                mov     w0, w23
+                mov     w1, w24
                 mov     w2, 99                  // Special type for boss explosion
                 bl      effects_spawn_explosion
 
@@ -418,14 +401,14 @@ proj_check_enemies:
                 ldrb    w22, [x19, PROJ_DAMAGE]
 
                 // Spawn floating damage number
-                mov     w0, w23                 // Hit X
-                mov     w1, w24                 // Hit Y
+                mov     w0, w23
+                mov     w1, w24
                 mov     w2, w22                 // Damage value
                 bl      effects_spawn_damage_num
 
                 // Damage the enemy
-                mov     w0, w21                 // Enemy slot
-                mov     w1, w22                 // Damage
+                mov     w0, w21
+                mov     w1, w22
                 bl      enemy_damage
 
                 // Check if enemy died (returns XP if dead)
@@ -436,8 +419,8 @@ proj_check_enemies:
                 mov     w25, w0                 // w25 = XP value
 
                 // Enemy died - spawn explosion effect!
-                mov     w0, w23                 // Hit X
-                mov     w1, w24                 // Hit Y
+                mov     w0, w23
+                mov     w1, w24
                 mov     w2, 0                   // Enemy type (could get from slot)
                 bl      effects_spawn_explosion
 
@@ -478,9 +461,7 @@ proj_update_done:
                 ldp     fp, lr, [sp], 80
                 ret
 
-// ============================================================================
 // projectiles_try_fire - Try to auto-fire at nearest enemy
-// ============================================================================
 projectiles_try_fire:
                 stp     fp, lr, [sp, -48]!
                 mov     fp, sp
@@ -549,9 +530,7 @@ try_fire_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // projectiles_draw - Draw all active projectiles
-// ============================================================================
                 .global projectiles_draw
 projectiles_draw:
                 stp     fp, lr, [sp, -48]!
@@ -624,11 +603,9 @@ proj_draw_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // enemy_damage - Damage an enemy
 // Parameters: w0 = enemy slot index, w1 = damage amount
 // Returns: w0 = XP if enemy died, 0 if still alive
-// ============================================================================
                 .global enemy_damage
 enemy_damage:
                 stp     fp, lr, [sp, -32]!
