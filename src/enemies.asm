@@ -158,8 +158,8 @@ random_next:
                 mul     w1, w1, w2
                 mov     w2, 12345
                 add     w1, w1, w2
-                // Mod 2^31 = clear top bit
-                bic     w1, w1, 0x80000000      // Clear bit 31
+                // Mod 2^31 = keep the low 31 bits (AArch64 has no BIC immediate)
+                and     w1, w1, 0x7fffffff      // Clear bit 31
 
                 str     w1, [x0]                // Store new state
                 mov     w0, w1                  // Return value
