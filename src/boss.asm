@@ -208,6 +208,9 @@ boss_spawn_common:
                 bl      play_bell
                 bl      play_bell
 
+                // The health bar takes over the top rule, so repaint in full
+                bl      screen_invalidate
+
                 ldr     x19, [sp, 16]
                 ldp     fp, lr, [sp], 32
                 ret
@@ -654,18 +657,24 @@ boss_killed:
                 add     x0, x0, :lo12:boss_active
                 str     wzr, [x0]
 
-                // Spawn big explosion. Keep the struct pointer in x3: loading
-                // the X coordinate into w0 would overwrite the base register.
-                adrp    x3, boss_data
-                add     x3, x3, :lo12:boss_data
-                ldrsh   w0, [x3, BOSS_X]
+                // Three explosions at the boss centre. effects_spawn_explosion
+                // takes its coordinates in w0-w2 and is free to clobber them,
+                // so every call reloads them. The struct pointer sits in x2,
+                // which the type argument overwrites only after both loads.
+                // w19 held the damage; the epilogue restores it from the frame.
+                mov     w19, 3                  // Explosions left to spawn
+
+boss_death_boom:
+                adrp    x2, boss_data
+                add     x2, x2, :lo12:boss_data
+                ldrsh   w0, [x2, BOSS_X]
                 add     w0, w0, 2               // Center
-                ldrsh   w1, [x3, BOSS_Y]
+                ldrsh   w1, [x2, BOSS_Y]
                 add     w1, w1, 1               // Center
                 mov     w2, 0
                 bl      effects_spawn_explosion
-                bl      effects_spawn_explosion
-                bl      effects_spawn_explosion
+                subs    w19, w19, 1
+                b.ne    boss_death_boom
 
                 // Multiple bells for epic death
                 bl      play_bell
