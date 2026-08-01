@@ -13,10 +13,11 @@
 ABILITY_BOMB = 1                                // Screen clear bomb
 ABILITY_FREEZE = 2                              // Freeze enemies
 
-// Cooldowns (in frames, ~60fps)
-BOMB_COOLDOWN = 1200                            // 20 seconds
-FREEZE_COOLDOWN = 900                           // 15 seconds
-FREEZE_DURATION = 180                           // 3 seconds
+// Cooldowns, counted in frames. Deriving them from TARGET_FPS keeps the
+// durations here and the seconds the HUD prints tied to the same frame rate.
+BOMB_COOLDOWN = 20 * TARGET_FPS                 // 20 seconds
+FREEZE_COOLDOWN = 15 * TARGET_FPS               // 15 seconds
+FREEZE_DURATION = 3 * TARGET_FPS                // 3 seconds
 
 // Key bindings
 KEY_BOMB = ' '                                  // Spacebar
@@ -346,9 +347,9 @@ abilities_draw_hud:
                 mov     w0, COLOR_RED
                 bl      set_color
 
-                // Calculate seconds (frames / 60)
+                // Calculate seconds (frames / TARGET_FPS)
                 mov     w0, w19
-                mov     w1, 60
+                mov     w1, TARGET_FPS
                 udiv    w0, w0, w1
                 add     w0, w0, 1               // Round up
 
@@ -406,9 +407,9 @@ draw_freeze_status:
                 mov     w0, COLOR_RED
                 bl      set_color
 
-                // Calculate seconds
+                // Calculate seconds (frames / TARGET_FPS)
                 mov     w0, w19
-                mov     w1, 60
+                mov     w1, TARGET_FPS
                 udiv    w0, w0, w1
                 add     w0, w0, 1
 
