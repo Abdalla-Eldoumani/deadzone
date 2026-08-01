@@ -1,11 +1,22 @@
-/* main.asm - DEADZONE Entry Point and Game Loop
-    @Author - Abdalla Eldoumani
-    * Program entry point for DEADZONE terminal survivor
-    * Initializes terminal, runs main game loop, handles cleanup
-*/
+// deadzone - a terminal survivor: waves of enemies, upgrades, and a boss
+//
+// The full project (build files, releases, history) lives at
+//   https://github.com/Abdalla-Eldoumani/deadzone
+//
+// how to run: press assemble, then run -- the game takes over the
+// terminal pane and grabs the keyboard. Or run it the course way
+// from the term tab:  ./program
+//
+// how to play: any key gets past the title, w/s or the arrows pick a
+// menu item, enter starts. Move with wasd or the arrows; the gun aims
+// itself at whatever is nearest. space drops a bomb that clears the
+// screen, f freezes every enemy for three seconds, 1/2/3 take an
+// upgrade when you level, p pauses, q or escape quits. On the game
+// over screen r restarts and m goes back to the menu. Survive the
+// waves; the Titan turns up at wave 10. High scores and achievements
 
-// ============== INCLUDE ALL MODULES VIA M4 ==============
-// Order matters: constants first, then modules, then main code
+// One assembly unit: m4 pastes the modules in before GAS sees any of it,
+// and constants has to come first because the equates are positional.
 include(src/constants.asm)
 include(src/terminal.asm)
 include(src/input.asm)
@@ -18,16 +29,15 @@ include(src/effects.asm)
 include(src/boss.asm)
 include(src/abilities.asm)
 
-// ============== MAIN MODULE CODE ==============
+// game_state stays in w19 for the whole run. player_died deliberately leaves
+// it set on the way out of check_player_enemy_collision instead of restoring
+// x19, which is how the game-over state survives the return; both collision
+// checks spill their death flag to the stack rather than touch w19.
+define(game_state, w19)
+define(frame_count, w22)
+define(key_pressed, w23)
 
-// ============== REGISTER ALIASES ==============
-define(game_state, w19)                         // Current game state
-define(player_x, w20)                           // Player X position (demo)
-define(player_y, w21)                           // Player Y position (demo)
-define(frame_count, w22)                        // Frame counter
-define(key_pressed, w23)                        // Last key pressed
-
-// ============== PLAY SCREEN ROWS ==============
+// Play screen rows
 // The status bar sits on SCREEN_HEIGHT - 2 and the abilities HUD on
 // SCREEN_HEIGHT - 1, so the field has to stop at row 17.
 ROW_TOP_BORDER = 1                              // Top rule
@@ -35,11 +45,7 @@ ROW_FIELD_FIRST = 2                             // First playable row
 ROW_FIELD_LAST = 17                             // Last playable row
 ROW_BOTTOM_BORDER = 18                          // Bottom rule
 
-// ============== DATA SECTION ==============
                 .data
-
-// Game state storage
-state_data:     .word   STATE_PLAYING           // Current state
 
 // Menu state
 menu_selection: .word   0                       // Current menu item (0=Start, 1=Scores, 2=Quit)
@@ -51,31 +57,22 @@ intro_done:     .word   0                       // 1 if intro complete
 
 // Frame timing
                 .balign 8
-frame_time:     .quad   0                       // Frame start time (sec)
-                .quad   FRAME_TIME_NS           // Sleep time (nsec)
 
 // Timing structures (for nanosleep)
                 .balign 8
-sleep_req:      .quad   0                       // tv_sec
-                .quad   FRAME_TIME_NS           // tv_nsec
+sleep_req:      .dword  0                       // tv_sec
+                .dword  FRAME_TIME_NS           // tv_nsec
 
                 .balign 8
-sleep_rem:      .quad   0                       // Remaining sec
-                .quad   0                       // Remaining nsec
+sleep_rem:      .dword  0                       // Remaining sec
+                .dword  0                       // Remaining nsec
 
-// ============== TEXT SECTION ==============
                 .text
 
 // Display strings
 msg_title:      .string "=== DEADZONE: Terminal Survivor ==="
-msg_phase:      .string "Phase 1: Foundation Test"
-msg_controls:   .string "Controls: WASD/Arrows to move, ESC to quit"
-msg_pos:        .string "Position: "
-msg_frame:      .string "Frame: "
-msg_key:        .string "Key: "
 msg_exit:       .string "\nExiting DEADZONE...\n"
 msg_goodbye:    .string "Terminal restored. Goodbye!\n"
-msg_starting:   .string "DEADZONE starting...\n"
 msg_term_fail:  .string "ERROR: Terminal init failed (no TTY?)\n"
 msg_term_ok:    .string ""
 msg_wave:       .string "Wave:"
@@ -83,7 +80,6 @@ msg_hp:         .string "HP:"
 msg_level:      .string "Lv:"
 msg_enemies:    .string "Enemies:"
 msg_kills:      .string "Kills:"
-msg_gameover:   .string "GAME OVER - Press Q to quit"
 
 // Game over screen strings
 msg_go_title:   .string "========== GAME OVER =========="
@@ -91,8 +87,6 @@ msg_go_score:   .string "Final Score: "
 msg_go_wave:    .string "Wave Reached: "
 msg_go_kills:   .string "Enemies Killed: "
 msg_go_level:   .string "Level Reached: "
-msg_go_highscore: .string "*** NEW HIGH SCORE! ***"
-msg_go_rank:    .string "Rank #"
 msg_go_quit:    .string "Press Q to quit, R to restart, M for menu"
 msg_hs_title:   .string "=== HIGH SCORES ==="
 msg_hs_empty:   .string "No high scores yet"
@@ -114,11 +108,6 @@ msg_menu_arrow: .string "> "
 msg_menu_nav:   .string "W/S or Arrows to select, Enter to confirm"
 msg_menu_back:  .string "Press ESC or Q to return"
 
-// ASCII art border for menu
-msg_border_top: .string "+======================================+"
-msg_border_mid: .string "|                                      |"
-msg_border_bot: .string "+======================================+"
-
 // Intro screen ASCII art logo (simplified block letters, 66 chars wide)
 intro_logo_1:   .string "######  #####    ###    ######  ######  #####   ##   ##  ##### "
 intro_logo_2:   .string "##   ## ##      ## ##   ##   ##    ##  ##   ##  ###  ##  ##    "
@@ -133,20 +122,17 @@ msg_intro_anykey:   .string "- Press any key to continue -"
 bell_char:      .string "\007"
 
 // Player character
-player_char:    .string "@"                     // Player symbol
 
                 .balign 4
 
-// ============================================================================
 // main - Program entry point
-// ============================================================================
                 .global main
 main:
-                stp     fp, lr, [sp, -64]!      // Save registers
-                mov     fp, sp                  // Establish frame pointer
-                stp     x19, x20, [sp, 16]      // Save callee-saved
-                stp     x21, x22, [sp, 32]      // Save more
-                str     x23, [sp, 48]           // Save key register
+                stp     fp, lr, [sp, -64]!
+                mov     fp, sp
+                stp     x19, x20, [sp, 16]
+                stp     x21, x22, [sp, 32]
+                str     x23, [sp, 48]
 
                 // Initialize terminal (raw mode)
                 bl      terminal_init           // Set up terminal
@@ -195,7 +181,7 @@ main_continue:
                 add     x0, x0, :lo12:show_hs_screen
                 str     wzr, [x0]
 
-// ============== MAIN GAME LOOP ==============
+// Main game loop
 game_loop:
                 // Check if we should quit
                 cmp     game_state, STATE_QUIT
@@ -203,7 +189,7 @@ game_loop:
 
                 // Poll for input
                 bl      input_poll              // Get key (non-blocking)
-                mov     key_pressed, w0         // Save key
+                mov     key_pressed, w0
 
                 // Check intro state first
                 cmp     game_state, STATE_INTRO
@@ -305,7 +291,7 @@ game_restart:
                 mov     frame_count, 0
                 b       game_loop
 
-// ============== INTRO STATE ==============
+// Intro state
 game_loop_intro:
                 // Draw intro screen with animation
                 bl      draw_intro_screen
@@ -349,7 +335,7 @@ intro_finish:
                 mov     game_state, STATE_MENU
                 b       game_loop
 
-// ============== MENU STATE ==============
+// Menu state
 game_loop_menu:
                 // Check if showing high scores screen
                 adrp    x0, show_hs_screen
@@ -513,7 +499,7 @@ select_upgrade_3:
                 mov     game_state, STATE_PLAYING
                 b       game_loop_render
 
-// ============== PAUSE STATE ==============
+// Pause state
 game_loop_paused:
                 // Repaint only. No update, no spawn, no timer, and the frame
                 // counter stays put, so nothing ages while the game is paused.
@@ -534,7 +520,7 @@ game_resume:
                 bl      frame_delay
                 b       game_loop
 
-// ============== EXIT ==============
+// Exit
 main_exit:
                 // The frame buffer is done with; these go straight out
                 bl      screen_end              // Park the cursor, drop colour
@@ -558,17 +544,15 @@ main_exit_error:
                 mov     w0, 1                   // Return code 1
 
 main_cleanup:
-                ldr     x23, [sp, 48]           // Restore registers
+                ldr     x23, [sp, 48]
                 ldp     x21, x22, [sp, 32]
                 ldp     x19, x20, [sp, 16]
                 ldp     fp, lr, [sp], 64
                 ret
 
-// ============================================================================
 // handle_input - Process keyboard input
-// ============================================================================
 handle_input:
-                stp     fp, lr, [sp, -16]!      // Save registers
+                stp     fp, lr, [sp, -16]!
                 mov     fp, sp
 
                 // Check for no key
@@ -649,9 +633,7 @@ handle_input_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // update_game - Update game logic
-// ============================================================================
 update_game:
                 stp     fp, lr, [sp, -16]!
                 mov     fp, sp
@@ -677,17 +659,15 @@ update_game:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // check_player_enemy_collision - Check if player touches any enemy
-// ============================================================================
 check_player_enemy_collision:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
-                str     x19, [sp, 16]           // Save callee-saved
+                str     x19, [sp, 16]
 
                 // Get player position
                 bl      player_get_x
-                mov     w19, w0                 // Save X
+                mov     w19, w0
                 bl      player_get_y
                 mov     w1, w0                  // Y in w1
                 mov     w0, w19                 // X in w0
@@ -728,12 +708,12 @@ player_died:
                 mul     w0, w0, w1              // Score = kills * 10
 
                 bl      enemies_get_wave
-                mov     w1, w0                  // Wave
+                mov     w1, w0
 
-                mov     w2, w19                 // Kills
+                mov     w2, w19
 
                 bl      player_get_level
-                mov     w3, w0                  // Level
+                mov     w3, w0
 
                 mov     w0, w19
                 mov     w4, 10
@@ -746,9 +726,7 @@ player_died:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // check_player_boss_collision - Check if player touches boss
-// ============================================================================
 check_player_boss_collision:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
@@ -783,15 +761,13 @@ no_boss_collision:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // draw_screen - Render the game screen
-// ============================================================================
 draw_screen:
                 stp     fp, lr, [sp, -64]!
                 mov     fp, sp
                 stp     x19, x20, [sp, 16]
                 stp     x21, x22, [sp, 32]
-                stp     x24, x25, [sp, 48]      // Save loop counters
+                stp     x24, x25, [sp, 48]
 
                 // Save frame info for status display
                 mov     w21, frame_count
@@ -891,17 +867,15 @@ draw_status_done:
 
                 bl      reset_color             // Reset colors
 
-                ldp     x24, x25, [sp, 48]      // Restore loop counters
+                ldp     x24, x25, [sp, 48]
                 ldp     x21, x22, [sp, 32]
                 ldp     x19, x20, [sp, 16]
                 ldp     fp, lr, [sp], 64
                 ret
 
-// ============================================================================
 // draw_frame_chrome - Borders, the empty play field and the spacer rows
 // Whole-row fills: the field costs a few hundred steps instead of the twelve
 // hundred single-character writes the sequential version needed.
-// ============================================================================
 draw_frame_chrome:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
@@ -958,16 +932,14 @@ draw_chrome_bottom:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // draw_border_row - One horizontal border with a corner at each end
 // Parameters: w0 = row
-// ============================================================================
 draw_border_row:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
                 str     x19, [sp, 16]
 
-                mov     w19, w0                 // Remember the row
+                mov     w19, w0
                 mov     w1, '-'
                 mov     w2, COLOR_GREEN
                 bl      fb_fill_row
@@ -991,9 +963,7 @@ draw_border_row:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // frame_delay - Sleep to maintain target frame rate
-// ============================================================================
 frame_delay:
                 stp     fp, lr, [sp, -16]!
                 mov     fp, sp
@@ -1008,15 +978,13 @@ frame_delay:
                 add     x0, x0, :lo12:sleep_req
                 adrp    x1, sleep_rem           // Remainder struct
                 add     x1, x1, :lo12:sleep_rem
-                mov     x8, SYS_NANOSLEEP       // nanosleep syscall
-                svc     0                       // Execute
+                mov     x8, SYS_NANOSLEEP
+                svc     0
 
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // draw_pause_overlay - Draw the pause banner over the frozen field
-// ============================================================================
 draw_pause_overlay:
                 stp     fp, lr, [sp, -16]!
                 mov     fp, sp
@@ -1050,9 +1018,7 @@ draw_pause_overlay:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // draw_gameover_screen - Draw the game over screen with stats
-// ============================================================================
 draw_gameover_screen:
                 stp     fp, lr, [sp, -48]!
                 mov     fp, sp
@@ -1091,7 +1057,7 @@ draw_gameover_screen:
                 bl      set_color
 
                 bl      player_get_kills
-                mov     w19, w0                 // Save kills
+                mov     w19, w0
                 mov     w1, 10
                 mul     w0, w0, w1              // Score = kills * 10
                 bl      write_num
@@ -1264,9 +1230,7 @@ draw_hs_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // draw_intro_screen - Draw animated intro/title screen
-// ============================================================================
 draw_intro_screen:
                 stp     fp, lr, [sp, -48]!
                 mov     fp, sp
@@ -1447,9 +1411,7 @@ intro_line4_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // draw_menu - Draw the main menu screen
-// ============================================================================
 draw_menu:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
@@ -1600,9 +1562,7 @@ menu_draw_quit:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // draw_highscores_screen - Draw the high scores screen from menu
-// ============================================================================
 draw_highscores_screen:
                 stp     fp, lr, [sp, -48]!
                 mov     fp, sp
@@ -1760,9 +1720,7 @@ draw_hs_back_msg:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // play_bell - Play terminal bell sound
-// ============================================================================
                 .global play_bell
 play_bell:
                 stp     fp, lr, [sp, -16]!
