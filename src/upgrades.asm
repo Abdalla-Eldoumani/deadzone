@@ -1,12 +1,7 @@
-/* upgrades.asm - Upgrade System
-    @Author - Abdalla Eldoumani
-    * Manages player upgrades and level-up selection
-    * Generates random upgrade choices on level up
-    * Applies upgrade bonuses to player and weapons
-    * NOTE: This file is included by main.asm via m4
-*/
+// Level-up upgrades: six kinds over five levels each, the random three-way
+// choice offered on level up, and the menu drawn over the paused field.
 
-// ============== UPGRADE TYPES ==============
+// Upgrade types
 UPGRADE_FIRE_RATE = 0                           // Faster firing
 UPGRADE_DAMAGE = 1                              // More damage per hit
 UPGRADE_PROJ_SPEED = 2                          // Faster projectiles
@@ -15,11 +10,11 @@ UPGRADE_MOVE_SPEED = 4                          // Faster movement
 UPGRADE_MULTI_SHOT = 5                          // Fire multiple projectiles
 UPGRADE_COUNT = 6                               // Total upgrade types
 
-// ============== UPGRADE LIMITS ==============
+// Upgrade limits
 MAX_UPGRADE_LEVEL = 5                           // Max level per upgrade
 NUM_CHOICES = 3                                 // Choices shown on level up
 
-// ============== UPGRADE BASE VALUES ==============
+// Upgrade base values
 // Fire rate: base 10, -2 per level (min 2)
 BASE_FIRE_RATE = 10
 FIRE_RATE_BONUS = 2
@@ -41,7 +36,6 @@ MOVE_SPEED_BONUS = 1
 // Multi-shot: +1 projectile per level
 MULTI_SHOT_BONUS = 1
 
-// ============== DATA SECTION ==============
                 .data
 
 // Current upgrade levels (one byte per upgrade type)
@@ -52,7 +46,6 @@ upgrade_levels: .skip   UPGRADE_COUNT           // All start at 0
                 .balign 4
 offered_upgrades: .word 0, 0, 0                 // Upgrade types offered
 
-// ============== TEXT SECTION ==============
                 .text
 
 // Upgrade names for UI display
@@ -82,9 +75,7 @@ msg_close_paren:    .string ")"
 
                 .balign 4
 
-// ============================================================================
 // upgrades_init - Initialize upgrade system
-// ============================================================================
                 .global upgrades_init
 upgrades_init:
                 stp     fp, lr, [sp, -16]!
@@ -106,10 +97,8 @@ upgrades_init_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // upgrades_generate_choices - Generate 3 random upgrade choices
 // Picks upgrades that aren't maxed out
-// ============================================================================
                 .global upgrades_generate_choices
 upgrades_generate_choices:
                 stp     fp, lr, [sp, -48]!
@@ -183,10 +172,8 @@ generate_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // upgrades_apply - Apply the selected upgrade
 // Parameters: w0 = choice index (0, 1, or 2)
-// ============================================================================
                 .global upgrades_apply
 upgrades_apply:
                 stp     fp, lr, [sp, -32]!
@@ -233,10 +220,8 @@ apply_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // upgrades_get_fire_rate - Get current fire rate (lower = faster)
 // Returns: w0 = fire rate in frames
-// ============================================================================
                 .global upgrades_get_fire_rate
 upgrades_get_fire_rate:
                 adrp    x0, upgrade_levels
@@ -256,10 +241,8 @@ upgrades_get_fire_rate:
 fire_rate_done:
                 ret
 
-// ============================================================================
 // upgrades_get_damage - Get current damage per projectile
 // Returns: w0 = damage amount
-// ============================================================================
                 .global upgrades_get_damage
 upgrades_get_damage:
                 adrp    x0, upgrade_levels
@@ -272,10 +255,8 @@ upgrades_get_damage:
                 add     w0, w0, BASE_DAMAGE
                 ret
 
-// ============================================================================
 // upgrades_get_proj_speed - Get projectile speed (lower = faster)
 // Returns: w0 = speed in frames per move
-// ============================================================================
                 .global upgrades_get_proj_speed
 upgrades_get_proj_speed:
                 adrp    x0, upgrade_levels
@@ -294,10 +275,8 @@ upgrades_get_proj_speed:
 proj_speed_done:
                 ret
 
-// ============================================================================
 // upgrades_get_multi_shot - Get number of extra projectiles
 // Returns: w0 = extra projectile count
-// ============================================================================
                 .global upgrades_get_multi_shot
 upgrades_get_multi_shot:
                 adrp    x0, upgrade_levels
@@ -305,11 +284,9 @@ upgrades_get_multi_shot:
                 ldrb    w0, [x0, UPGRADE_MULTI_SHOT]
                 ret
 
-// ============================================================================
 // upgrades_get_name - Get upgrade name string address
 // Parameters: w0 = upgrade type
 // Returns: x0 = string address
-// ============================================================================
 upgrades_get_name:
                 cmp     w0, UPGRADE_FIRE_RATE
                 b.eq    name_fire_rate
@@ -353,20 +330,16 @@ name_multi_shot:
                 add     x0, x0, :lo12:upgrade_name_multi_shot
                 ret
 
-// ============================================================================
 // upgrades_get_level - Get current level of an upgrade
 // Parameters: w0 = upgrade type
 // Returns: w0 = level (0-5)
-// ============================================================================
 upgrades_get_level:
                 adrp    x1, upgrade_levels
                 add     x1, x1, :lo12:upgrade_levels
                 ldrb    w0, [x1, w0, uxtw]
                 ret
 
-// ============================================================================
 // upgrades_draw_menu - Draw the level-up selection UI
-// ============================================================================
                 .global upgrades_draw_menu
 upgrades_draw_menu:
                 stp     fp, lr, [sp, -48]!
@@ -473,10 +446,8 @@ upgrades_draw_menu:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // upgrades_draw_level_indicator - Draw " (Lv X)" for upgrade
 // Parameters: w0 = upgrade type
-// ============================================================================
 upgrades_draw_level_indicator:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
