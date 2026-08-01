@@ -1,21 +1,14 @@
-/* input.asm - Non-blocking Keyboard Input
-    @Author - Abdalla Eldoumani
-    * Provides non-blocking keyboard input polling
-    * Handles regular keys and arrow key escape sequences
-    * Functions: input_init, input_poll, input_get_key
-    * NOTE: This file is included by main.asm via m4
-*/
+// Non-blocking keyboard input. Reads at most one byte a frame and decodes
+// arrow-key escape sequences across frames onto the same codes as w/a/s/d.
 
-// ============== REGISTER ALIASES ==============
 define(key_reg, w19)                            // Current key value
 define(state_reg, w20)                          // Escape sequence state
 
-// ============== ESCAPE SEQUENCE STATES ==============
+// Escape sequence states
 ESC_STATE_NONE = 0                              // No escape sequence
 ESC_STATE_ESC = 1                               // Received ESC
 ESC_STATE_BRACKET = 2                           // Received ESC [
 
-// ============== DATA SECTION ==============
                 .data
 
 // Current key state
@@ -29,65 +22,60 @@ esc_state:      .word   ESC_STATE_NONE          // Current escape state
 input_buf:      .byte   0                       // Input buffer
                 .balign 4
 
-// ============== TEXT SECTION ==============
                 .text
 
                 .balign 4
 
-// ============================================================================
 // input_init - Initialize input system
 // Called after terminal_init to set up input handling
-// ============================================================================
                 .global input_init
 input_init:
-                stp     fp, lr, [sp, -16]!      // Save registers
-                mov     fp, sp                  // Establish frame pointer
+                stp     fp, lr, [sp, -16]!
+                mov     fp, sp
 
                 // Clear key state
-                adrp    x0, current_key         // Get address
+                adrp    x0, current_key
                 add     x0, x0, :lo12:current_key
-                mov     w1, KEY_NONE            // No key
-                str     w1, [x0]                // Store
+                mov     w1, KEY_NONE
+                str     w1, [x0]
 
                 // Clear escape state
-                adrp    x0, esc_state           // Get address
+                adrp    x0, esc_state
                 add     x0, x0, :lo12:esc_state
                 mov     w1, ESC_STATE_NONE      // No escape
-                str     w1, [x0]                // Store
+                str     w1, [x0]
 
-                ldp     fp, lr, [sp], 16        // Restore and return
+                ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // input_poll - Poll for keyboard input (non-blocking)
 // Returns: w0 = key code, or KEY_NONE (-1) if no key pressed
 // Handles arrow keys as escape sequences
-// ============================================================================
                 .global input_poll
 input_poll:
-                stp     fp, lr, [sp, -32]!      // Save registers
-                mov     fp, sp                  // Establish frame pointer
-                stp     x19, x20, [sp, 16]      // Save callee-saved
+                stp     fp, lr, [sp, -32]!
+                mov     fp, sp
+                stp     x19, x20, [sp, 16]
 
                 // Load current escape state
-                adrp    x0, esc_state           // Get address
+                adrp    x0, esc_state
                 add     x0, x0, :lo12:esc_state
                 ldr     state_reg, [x0]         // Load state
 
                 // Try to read a byte (non-blocking due to VMIN=0, VTIME=0)
-                mov     x0, STDIN               // File descriptor
-                adrp    x1, input_buf           // Buffer
+                mov     x0, STDIN
+                adrp    x1, input_buf
                 add     x1, x1, :lo12:input_buf
                 mov     x2, 1                   // Read 1 byte
-                mov     x8, SYS_READ            // read syscall
-                svc     0                       // Execute
+                mov     x8, SYS_READ
+                svc     0
 
                 // Check if we got a byte
                 cmp     x0, 0                   // Check bytes read
                 b.le    poll_no_input           // No input available
 
                 // Load the byte we read
-                adrp    x0, input_buf           // Get buffer address
+                adrp    x0, input_buf
                 add     x0, x0, :lo12:input_buf
                 ldrb    key_reg, [x0]           // Load byte into key_reg
 
@@ -101,7 +89,7 @@ input_poll:
 
                 // Got ESC - start escape sequence
                 mov     state_reg, ESC_STATE_ESC
-                adrp    x0, esc_state           // Store new state
+                adrp    x0, esc_state
                 add     x0, x0, :lo12:esc_state
                 str     state_reg, [x0]
 
@@ -118,7 +106,7 @@ poll_in_escape:
 
                 // Got [ - advance to bracket state
                 mov     state_reg, ESC_STATE_BRACKET
-                adrp    x0, esc_state           // Store new state
+                adrp    x0, esc_state
                 add     x0, x0, :lo12:esc_state
                 str     state_reg, [x0]
 
@@ -196,18 +184,18 @@ poll_return_key:
 
 poll_done:
                 mov     w0, key_reg             // Return key code
-                ldp     x19, x20, [sp, 16]      // Restore callee-saved
-                ldp     fp, lr, [sp], 32        // Restore and return
+                ldp     x19, x20, [sp, 16]
+                ldp     fp, lr, [sp], 32
                 ret
 
 input_poll_again:
                 // Try another read immediately (for escape sequences)
-                mov     x0, STDIN               // File descriptor
-                adrp    x1, input_buf           // Buffer
+                mov     x0, STDIN
+                adrp    x1, input_buf
                 add     x1, x1, :lo12:input_buf
                 mov     x2, 1                   // Read 1 byte
-                mov     x8, SYS_READ            // read syscall
-                svc     0                       // Execute
+                mov     x8, SYS_READ
+                svc     0
 
                 cmp     x0, 0                   // Check bytes read
                 b.le    poll_no_input           // No more input
@@ -218,24 +206,3 @@ input_poll_again:
                 ldrb    key_reg, [x0]
                 b       poll_in_escape          // Continue escape handling
 
-// ============================================================================
-// input_get_key - Get the last polled key
-// Returns: w0 = last key code from input_poll
-// ============================================================================
-                .global input_get_key
-input_get_key:
-                adrp    x0, current_key         // Get address
-                add     x0, x0, :lo12:current_key
-                ldr     w0, [x0]                // Load key
-                ret
-
-// ============================================================================
-// input_clear - Clear current key state
-// ============================================================================
-                .global input_clear
-input_clear:
-                adrp    x0, current_key         // Get address
-                add     x0, x0, :lo12:current_key
-                mov     w1, KEY_NONE            // No key
-                str     w1, [x0]                // Store
-                ret
