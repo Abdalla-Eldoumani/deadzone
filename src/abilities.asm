@@ -247,8 +247,7 @@ bomb_kill_done:
                 str     w1, [x0]
 
                 // Play sound (bell)
-                mov     w0, 0x07                // ASCII bell
-                bl      write_char
+                bl      play_bell
 
 bomb_not_ready:
                 ldr     x23, [sp, 48]
@@ -295,8 +294,7 @@ abilities_use_freeze:
                 str     w1, [x0]
 
                 // Play sound (bell)
-                mov     w0, 0x07                // ASCII bell
-                bl      write_char
+                bl      play_bell
 
 freeze_not_ready:
                 ldp     fp, lr, [sp], 16
