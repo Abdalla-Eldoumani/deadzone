@@ -26,7 +26,8 @@ STAT_TIME = 8                                   // Total time in seconds (4 byte
 STAT_BEST_WAVE = 12                             // Highest wave reached (4 bytes)
 STAT_BEST_LEVEL = 16                            // Highest level reached (4 bytes)
 STAT_BEST_KILLS = 20                            // Most kills in one game (4 bytes)
-STAT_PADDING = 24                               // Padding (8 bytes)
+STAT_ACHIEVEMENTS = 24                          // Achievement bitmask (4 bytes)
+STAT_PADDING = 28                               // Padding (4 bytes)
 STAT_SIZE = 32                                  // Total size
 
 // ============== SAVE FILE STRUCTURE ==============
@@ -67,7 +68,10 @@ stat_time:      .word   0                       // Total time (seconds)
 stat_best_wave: .word   0                       // Highest wave
 stat_best_level: .word  0                       // Highest level
 stat_best_kills: .word  0                       // Most kills in one game
-                .skip   8                       // Padding
+// The bitmask lives in what used to be stats padding, so it rides along with
+// the block save_load/save_write already copy. Version 1 files read back zero.
+achievements:   .word   0                       // Unlocked achievements bitmask
+                .skip   4                       // Padding
 
 // Current game stats (for end-of-game saving)
                 .balign 4
@@ -568,13 +572,16 @@ ACH_BOSS_KILL = 0x0020                          // Killed a boss
 ACH_NO_DMG_WAVE = 0x0040                        // Completed wave without damage
 ACH_SURVIVOR = 0x0080                           // Survived 5 minutes
 
-// Achievement data (in memory, persists during session)
+// The game keeps no wall clock, so "5 minutes" is counted in played frames
+ACH_SURVIVE_FRAMES = 300 * TARGET_FPS           // 5 minutes at the loop rate
+
+// Per-run achievement state (the unlocked bitmask lives in game_stats)
                 .data
                 .balign 4
-achievements:   .word   0                       // Unlocked achievements bitmask
 ach_pending:    .word   0                       // Newly unlocked (for notification)
 ach_wave_nodmg: .word   1                       // Tracking no damage this wave
 ach_notify_timer: .word 0                       // Notification display timer
+ach_survive_frames: .word 0                     // Frames played this run
 
                 .text
 
@@ -615,6 +622,11 @@ achievements_init:
                 adrp    x0, ach_notify_timer
                 add     x0, x0, :lo12:ach_notify_timer
                 mov     w1, 0
+                str     w1, [x0]
+
+                // Reset survival counter
+                adrp    x0, ach_survive_frames
+                add     x0, x0, :lo12:ach_survive_frames
                 str     w1, [x0]
 
                 ldp     fp, lr, [sp], 16
@@ -705,8 +717,18 @@ ach_check_wave5:
 
 ach_check_kills:
                 cmp     w19, 100
-                b.lt    ach_check_done
+                b.lt    ach_check_survive
                 mov     w0, ACH_KILLS_100
+                bl      achievements_unlock
+
+ach_check_survive:
+                adrp    x0, ach_survive_frames
+                add     x0, x0, :lo12:ach_survive_frames
+                ldr     w0, [x0]
+                mov     w1, ACH_SURVIVE_FRAMES
+                cmp     w0, w1
+                b.lt    ach_check_done
+                mov     w0, ACH_SURVIVOR
                 bl      achievements_unlock
 
 ach_check_done:
@@ -776,6 +798,13 @@ ach_wave_reset:
 achievements_update:
                 stp     fp, lr, [sp, -16]!
                 mov     fp, sp
+
+                // Count one more frame survived; only the playing loop gets here
+                adrp    x0, ach_survive_frames
+                add     x0, x0, :lo12:ach_survive_frames
+                ldr     w1, [x0]
+                add     w1, w1, 1
+                str     w1, [x0]
 
                 // Decrement notification timer
                 adrp    x0, ach_notify_timer
