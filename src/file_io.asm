@@ -574,6 +574,7 @@ ACH_SURVIVOR = 0x0080                           // Survived 5 minutes
 
 // The game keeps no wall clock, so "5 minutes" is counted in played frames
 ACH_SURVIVE_FRAMES = 300 * TARGET_FPS           // 5 minutes at the loop rate
+ACH_NOTIFY_FRAMES = 3 * TARGET_FPS              // Banner stays up 3 seconds
 
 // Per-run achievement state (the unlocked bitmask lives in game_stats)
                 .data
@@ -652,24 +653,21 @@ achievements_unlock:
                 orr     w2, w2, w0
                 str     w2, [x1]
 
-                // Mark as pending for notification
+                // The banner names one achievement, so the newest unlock
+                // replaces whatever was showing rather than joining it
                 adrp    x1, ach_pending
                 add     x1, x1, :lo12:ach_pending
-                ldr     w2, [x1]
-                orr     w2, w2, w0
-                str     w2, [x1]
+                str     w0, [x1]
 
-                // Set notification timer (3 seconds = 180 frames)
+                // Restart the notification timer
                 adrp    x1, ach_notify_timer
                 add     x1, x1, :lo12:ach_notify_timer
-                mov     w2, 180
+                mov     w2, ACH_NOTIFY_FRAMES
                 str     w2, [x1]
 
                 // Play sound
-                mov     w0, 0x07
-                bl      write_char
-                mov     w0, 0x07
-                bl      write_char
+                bl      play_bell
+                bl      play_bell
 
 ach_already_unlocked:
                 ldp     fp, lr, [sp], 16
