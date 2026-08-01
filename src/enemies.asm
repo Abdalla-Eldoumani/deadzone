@@ -758,6 +758,17 @@ enemies_check_collision:
                 mov     w19, w0                 // Save X
                 mov     w20, w1                 // Save Y
 
+                // Every live projectile runs this scan every frame, so it pays
+                // to stop as soon as the pool cannot hold another live enemy.
+                // enemy_count is kept in step with ENEMY_ACTIVE at every spawn,
+                // kill and bomb, so once that many active slots have been seen
+                // the rest of the pool is empty.
+                adrp    x3, enemy_count
+                add     x3, x3, :lo12:enemy_count
+                ldr     w3, [x3]                // Live enemies remaining
+                cmp     w3, 0
+                b.le    collision_none
+
                 adrp    x0, enemy_pool
                 add     x0, x0, :lo12:enemy_pool
                 mov     w1, 0                   // Slot index
@@ -766,23 +777,29 @@ collision_loop:
                 cmp     w1, MAX_ENEMIES
                 b.ge    collision_none
 
-                // Check if active
+                // Dead slots are the common case, so reject them first
                 ldrb    w2, [x0, ENEMY_ACTIVE]
                 cbz     w2, collision_next
 
-                // Check X
+                // One live enemy accounted for
+                sub     w3, w3, 1
+
+                // Single-axis reject before touching the second coordinate
                 ldrsh   w2, [x0, ENEMY_X]
                 cmp     w2, w19
-                b.ne    collision_next
+                b.ne    collision_seen
 
                 // Check Y
                 ldrsh   w2, [x0, ENEMY_Y]
                 cmp     w2, w20
-                b.ne    collision_next
+                b.ne    collision_seen
 
                 // Hit!
                 mov     w0, w1
                 b       collision_done
+
+collision_seen:
+                cbz     w3, collision_none      // No live enemies left to find
 
 collision_next:
                 add     x0, x0, ENEMY_STRUCT_SIZE
