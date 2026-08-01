@@ -1,17 +1,12 @@
-/* file_io.asm - Save/Load System
-    @Author - Abdalla Eldoumani
-    * Manages high scores and statistics persistence
-    * Binary save file format for efficiency
-    * Functions: save_init, save_load, save_write, save_add_score
-    * NOTE: This file is included by main.asm via m4
-*/
+// Persistence and achievements. One 120-byte binary file holds the top five
+// scores, lifetime statistics and the achievement bitmask; the achievement
+// rules and the unlock banner live here too.
 
-// ============== SAVE FILE CONSTANTS ==============
-SAVE_MAGIC = 0x44414544                         // "DEAD" in little-endian
+// Save file constants
 SAVE_VERSION = 1                                // Save file version
 MAX_HIGH_SCORES = 5                             // Number of high scores to keep
 
-// ============== HIGH SCORE STRUCTURE (16 bytes) ==============
+// High score structure (16 bytes)
 HS_SCORE = 0                                    // Score (4 bytes)
 HS_WAVE = 4                                     // Wave reached (2 bytes)
 HS_KILLS = 6                                    // Kill count (4 bytes)
@@ -19,7 +14,7 @@ HS_LEVEL = 10                                   // Player level (2 bytes)
 HS_PADDING = 12                                 // Padding (4 bytes)
 HS_SIZE = 16                                    // Total size
 
-// ============== STATISTICS STRUCTURE (32 bytes) ==============
+// Statistics structure (32 bytes)
 STAT_GAMES = 0                                  // Total games played (4 bytes)
 STAT_KILLS = 4                                  // Total kills (4 bytes)
 STAT_TIME = 8                                   // Total time in seconds (4 bytes)
@@ -30,7 +25,7 @@ STAT_ACHIEVEMENTS = 24                          // Achievement bitmask (4 bytes)
 STAT_PADDING = 28                               // Padding (4 bytes)
 STAT_SIZE = 32                                  // Total size
 
-// ============== SAVE FILE STRUCTURE ==============
+// Save file structure
 // Header: 8 bytes (magic + version)
 // High Scores: 5 * 16 = 80 bytes
 // Statistics: 32 bytes
@@ -40,7 +35,7 @@ SAVE_SCORES_OFFSET = 8
 SAVE_STATS_OFFSET = 88                          // 8 + 80
 SAVE_FILE_SIZE = 120
 
-// ============== FILE FLAGS ==============
+// File flags
 O_RDONLY = 0                                    // Open read-only
 O_WRONLY = 1                                    // Open write-only
 O_RDWR = 2                                      // Open read-write
@@ -48,7 +43,6 @@ O_CREAT = 64                                    // Create if not exists
 O_TRUNC = 512                                   // Truncate file
 AT_FDCWD = -100                                 // Current directory
 
-// ============== DATA SECTION ==============
                 .data
 
 // Save file path (in data directory)
@@ -79,19 +73,15 @@ current_score:  .word   0                       // Score this game
 save_wave:      .word   0                       // Wave reached (renamed to avoid conflict)
 save_kills:     .word   0                       // Kills this game
 save_level:     .word   0                       // Level reached
-game_start_time: .quad  0                       // Start time (for duration)
 
 // File buffer
                 .balign 8
 file_buffer:    .skip   SAVE_FILE_SIZE
 
-// ============== TEXT SECTION ==============
                 .text
                 .balign 4
 
-// ============================================================================
 // save_init - Initialize save system (load existing data)
-// ============================================================================
                 .global save_init
 save_init:
                 stp     fp, lr, [sp, -16]!
@@ -115,10 +105,8 @@ save_init_load:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // save_load - Load save file from disk
 // Returns: w0 = 1 if loaded successfully, 0 if failed/not found
-// ============================================================================
                 .global save_load
 save_load:
                 stp     fp, lr, [sp, -32]!
@@ -129,7 +117,7 @@ save_load:
                 mov     x0, AT_FDCWD            // Current directory
                 adrp    x1, save_path
                 add     x1, x1, :lo12:save_path
-                mov     x2, O_RDONLY            // Read only
+                mov     x2, O_RDONLY
                 mov     x3, 0                   // Mode (unused for read)
                 mov     x8, SYS_OPENAT
                 svc     0
@@ -137,13 +125,13 @@ save_load:
                 // Check if open succeeded
                 cmp     x0, 0
                 b.lt    save_load_fail
-                mov     x19, x0                 // Save file descriptor
+                mov     x19, x0
 
                 // Read file into buffer
-                mov     x0, x19                 // fd
+                mov     x0, x19
                 adrp    x1, file_buffer
                 add     x1, x1, :lo12:file_buffer
-                mov     x2, SAVE_FILE_SIZE      // count
+                mov     x2, SAVE_FILE_SIZE
                 mov     x8, SYS_READ
                 svc     0
 
@@ -205,10 +193,8 @@ save_load_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // save_write - Write save file to disk
 // Returns: w0 = 1 if saved successfully, 0 if failed
-// ============================================================================
                 .global save_write
 save_write:
                 stp     fp, lr, [sp, -32]!
@@ -269,7 +255,7 @@ save_write_file:
 
                 cmp     x0, 0
                 b.lt    save_write_fail
-                mov     x19, x0                 // Save fd
+                mov     x19, x0
 
                 // Write buffer to file
                 mov     x0, x19
@@ -295,9 +281,7 @@ save_write_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // save_start_game - Call at game start to track time
-// ============================================================================
                 .global save_start_game
 save_start_game:
                 stp     fp, lr, [sp, -16]!
@@ -322,11 +306,9 @@ save_start_game:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // save_end_game - Call at game end to save stats and check high score
 // Parameters: w0 = final score, w1 = wave, w2 = kills, w3 = level
 // Returns: w0 = high score rank (1-5) or 0 if not a high score
-// ============================================================================
                 .global save_end_game
 save_end_game:
                 stp     fp, lr, [sp, -48]!
@@ -335,10 +317,10 @@ save_end_game:
                 stp     x21, x22, [sp, 32]
 
                 // Save parameters
-                mov     w19, w0                 // Score
-                mov     w20, w1                 // Wave
-                mov     w21, w2                 // Kills
-                mov     w22, w3                 // Level
+                mov     w19, w0
+                mov     w20, w1
+                mov     w21, w2
+                mov     w22, w3
 
                 // Store current game stats
                 adrp    x0, current_score
@@ -383,12 +365,12 @@ end_game_check_kills:
 
 end_game_add_score:
                 // Try to add to high scores
-                mov     w0, w19                 // Score
-                mov     w1, w20                 // Wave
-                mov     w2, w21                 // Kills
-                mov     w3, w22                 // Level
+                mov     w0, w19
+                mov     w1, w20
+                mov     w2, w21
+                mov     w3, w22
                 bl      save_add_high_score
-                mov     w19, w0                 // Save rank
+                mov     w19, w0
 
                 // Save to file
                 bl      save_write
@@ -400,11 +382,9 @@ end_game_add_score:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // save_add_high_score - Add score to high score list if qualifies
 // Parameters: w0 = score, w1 = wave, w2 = kills, w3 = level
 // Returns: w0 = rank (1-5) or 0 if didn't qualify
-// ============================================================================
 save_add_high_score:
                 stp     fp, lr, [sp, -64]!
                 mov     fp, sp
@@ -413,15 +393,15 @@ save_add_high_score:
                 stp     x23, x24, [sp, 48]
 
                 // Save parameters
-                mov     w19, w0                 // Score
-                mov     w20, w1                 // Wave
-                mov     w21, w2                 // Kills
-                mov     w22, w3                 // Level
+                mov     w19, w0
+                mov     w20, w1
+                mov     w21, w2
+                mov     w22, w3
 
                 // Find insertion position
                 adrp    x23, high_scores
                 add     x23, x23, :lo12:high_scores
-                mov     w24, 0                  // Position (0-4)
+                mov     w24, 0
 
 find_position:
                 cmp     w24, MAX_HIGH_SCORES
@@ -492,11 +472,9 @@ add_score_done:
                 ldp     fp, lr, [sp], 64
                 ret
 
-// ============================================================================
 // save_get_high_score - Get a high score entry
 // Parameters: w0 = rank (0-4)
 // Returns: x0 = pointer to high score entry, or 0 if invalid
-// ============================================================================
                 .global save_get_high_score
 save_get_high_score:
                 cmp     w0, MAX_HIGH_SCORES
@@ -514,53 +492,6 @@ save_get_high_score:
 get_hs_invalid:
                 mov     x0, 0
                 ret
-
-// ============================================================================
-// save_get_stats - Get pointer to statistics
-// Returns: x0 = pointer to game_stats
-// ============================================================================
-                .global save_get_stats
-save_get_stats:
-                adrp    x0, game_stats
-                add     x0, x0, :lo12:game_stats
-                ret
-
-// ============================================================================
-// save_get_best_wave - Get highest wave reached
-// Returns: w0 = best wave
-// ============================================================================
-                .global save_get_best_wave
-save_get_best_wave:
-                adrp    x0, stat_best_wave
-                add     x0, x0, :lo12:stat_best_wave
-                ldr     w0, [x0]
-                ret
-
-// ============================================================================
-// save_get_total_kills - Get total kills across all games
-// Returns: w0 = total kills
-// ============================================================================
-                .global save_get_total_kills
-save_get_total_kills:
-                adrp    x0, stat_kills
-                add     x0, x0, :lo12:stat_kills
-                ldr     w0, [x0]
-                ret
-
-// ============================================================================
-// save_get_games_played - Get total games played
-// Returns: w0 = games played
-// ============================================================================
-                .global save_get_games_played
-save_get_games_played:
-                adrp    x0, stat_games
-                add     x0, x0, :lo12:stat_games
-                ldr     w0, [x0]
-                ret
-
-// ============================================================================
-// ACHIEVEMENT SYSTEM
-// ============================================================================
 
 // Achievement bit flags
 ACH_FIRST_KILL = 0x0001                         // First enemy killed
@@ -599,9 +530,7 @@ ach_survivor5:  .string "Endurance"
 
                 .balign 4
 
-// ============================================================================
 // achievements_init - Reset achievements for new game
-// ============================================================================
                 .global achievements_init
 achievements_init:
                 stp     fp, lr, [sp, -16]!
@@ -633,10 +562,8 @@ achievements_init:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // achievements_unlock - Unlock an achievement
 // Parameters: w0 = achievement bit flag
-// ============================================================================
                 .global achievements_unlock
 achievements_unlock:
                 stp     fp, lr, [sp, -16]!
@@ -673,10 +600,8 @@ ach_already_unlocked:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // achievements_check - Check for achievement conditions
 // Called each frame during gameplay
-// ============================================================================
                 .global achievements_check
 achievements_check:
                 stp     fp, lr, [sp, -48]!
@@ -735,9 +660,7 @@ ach_check_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // achievements_on_boss_kill - Call when boss is killed
-// ============================================================================
                 .global achievements_on_boss_kill
 achievements_on_boss_kill:
                 stp     fp, lr, [sp, -16]!
@@ -749,9 +672,7 @@ achievements_on_boss_kill:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // achievements_on_damage - Call when player takes damage
-// ============================================================================
                 .global achievements_on_damage
 achievements_on_damage:
                 // Mark that player took damage this wave
@@ -761,9 +682,7 @@ achievements_on_damage:
                 str     w1, [x0]
                 ret
 
-// ============================================================================
 // achievements_on_wave_complete - Call when wave is completed
-// ============================================================================
                 .global achievements_on_wave_complete
 achievements_on_wave_complete:
                 stp     fp, lr, [sp, -16]!
@@ -789,9 +708,7 @@ ach_wave_reset:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // achievements_update - Update notification timer
-// ============================================================================
                 .global achievements_update
 achievements_update:
                 stp     fp, lr, [sp, -16]!
@@ -823,9 +740,7 @@ ach_update_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // achievements_draw - Draw achievement notification if pending
-// ============================================================================
                 .global achievements_draw
 achievements_draw:
                 stp     fp, lr, [sp, -32]!
