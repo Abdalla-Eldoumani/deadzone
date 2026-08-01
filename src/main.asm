@@ -91,6 +91,10 @@ msg_hs_empty:   .string "No high scores yet"
 msg_dot:        .string ". "
 msg_space:      .string "  "
 
+// Pause overlay strings
+msg_pause:      .string "PAUSED"
+msg_pause_hint: .string "p to resume, q to quit"
+
 // Main menu strings
 msg_menu_title: .string "DEADZONE"
 msg_menu_sub:   .string "Terminal Survivor"
@@ -216,6 +220,10 @@ game_loop:
                 // Check level up state
                 cmp     game_state, STATE_LEVELUP
                 b.eq    game_loop_levelup
+
+                // Check paused state
+                cmp     game_state, STATE_PAUSED
+                b.eq    game_loop_paused
 
                 // Update game state
                 bl      update_game             // Update logic
@@ -494,6 +502,26 @@ select_upgrade_3:
                 mov     game_state, STATE_PLAYING
                 b       game_loop_render
 
+// ============== PAUSE STATE ==============
+game_loop_paused:
+                // Repaint only. No update, no spawn, no timer, and the frame
+                // counter stays put, so nothing ages while the game is paused.
+                bl      draw_screen
+                bl      effects_draw
+                bl      draw_pause_overlay
+
+                // Quitting already went through handle_input; p resumes
+                cmp     key_pressed, KEY_P
+                b.eq    game_resume
+
+                bl      frame_delay
+                b       game_loop
+
+game_resume:
+                mov     game_state, STATE_PLAYING
+                bl      frame_delay
+                b       game_loop
+
 // ============== EXIT ==============
 main_exit:
                 // Show exit message
@@ -550,6 +578,12 @@ handle_input:
                 cmp     game_state, STATE_LEVELUP
                 b.eq    handle_input_done       // Skip movement during level-up
 
+                // Pause toggle, then swallow everything else while paused
+                cmp     key_pressed, KEY_P
+                b.eq    handle_pause
+                cmp     game_state, STATE_PAUSED
+                b.eq    handle_input_done
+
                 // Check movement keys
                 cmp     key_pressed, KEY_W
                 b.eq    handle_up
@@ -569,6 +603,14 @@ handle_input:
 handle_quit:
                 mov     game_state, STATE_QUIT  // Set quit state
                 b       handle_input_done
+
+handle_pause:
+                // Only a live game pauses; the paused loop handles resuming
+                cmp     game_state, STATE_PLAYING
+                b.ne    handle_input_done
+                mov     game_state, STATE_PAUSED
+                mov     key_pressed, KEY_NONE   // Spend the key, or pause ends
+                b       handle_input_done       //   on the frame that began it
 
 handle_up:
                 mov     w0, 0                   // dx = 0
@@ -1038,6 +1080,42 @@ frame_delay:
                 add     x1, x1, :lo12:sleep_rem
                 mov     x8, SYS_NANOSLEEP       // nanosleep syscall
                 svc     0                       // Execute
+
+                ldp     fp, lr, [sp], 16
+                ret
+
+// ============================================================================
+// draw_pause_overlay - Draw the pause banner over the frozen field
+// ============================================================================
+draw_pause_overlay:
+                stp     fp, lr, [sp, -16]!
+                mov     fp, sp
+
+                // Banner, centred on the play field
+                mov     w0, SCREEN_WIDTH / 2 - 3
+                mov     w1, 9
+                bl      cursor_move
+
+                mov     w0, COLOR_BRIGHT_YELLOW
+                bl      set_color
+
+                adrp    x0, msg_pause
+                add     x0, x0, :lo12:msg_pause
+                bl      write_str
+
+                // Key hint below it
+                mov     w0, SCREEN_WIDTH / 2 - 11
+                mov     w1, 11
+                bl      cursor_move
+
+                mov     w0, COLOR_CYAN
+                bl      set_color
+
+                adrp    x0, msg_pause_hint
+                add     x0, x0, :lo12:msg_pause_hint
+                bl      write_str
+
+                bl      reset_color
 
                 ldp     fp, lr, [sp], 16
                 ret
