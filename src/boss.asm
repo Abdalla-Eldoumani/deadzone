@@ -654,12 +654,13 @@ boss_killed:
                 add     x0, x0, :lo12:boss_active
                 str     wzr, [x0]
 
-                // Spawn big explosion
-                adrp    x0, boss_data
-                add     x0, x0, :lo12:boss_data
-                ldrsh   w0, [x0, BOSS_X]
+                // Spawn big explosion. Keep the struct pointer in x3: loading
+                // the X coordinate into w0 would overwrite the base register.
+                adrp    x3, boss_data
+                add     x3, x3, :lo12:boss_data
+                ldrsh   w0, [x3, BOSS_X]
                 add     w0, w0, 2               // Center
-                ldrsh   w1, [x0, BOSS_Y]
+                ldrsh   w1, [x3, BOSS_Y]
                 add     w1, w1, 1               // Center
                 mov     w2, 0
                 bl      effects_spawn_explosion
