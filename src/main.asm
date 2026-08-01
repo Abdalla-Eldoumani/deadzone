@@ -27,6 +27,14 @@ define(player_y, w21)                           // Player Y position (demo)
 define(frame_count, w22)                        // Frame counter
 define(key_pressed, w23)                        // Last key pressed
 
+// ============== PLAY SCREEN ROWS ==============
+// The status bar sits on SCREEN_HEIGHT - 2 and the abilities HUD on
+// SCREEN_HEIGHT - 1, so the field has to stop at row 17.
+ROW_TOP_BORDER = 1                              // Top rule
+ROW_FIELD_FIRST = 2                             // First playable row
+ROW_FIELD_LAST = 17                             // Last playable row
+ROW_BOTTOM_BORDER = 18                          // Bottom rule
+
 // ============== DATA SECTION ==============
                 .data
 
@@ -123,11 +131,6 @@ msg_intro_anykey:   .string "- Press any key to continue -"
 
 // Bell character for sound
 bell_char:      .string "\007"
-
-// Border characters
-border_h:       .string "-"                     // Horizontal border
-border_v:       .string "|"                     // Vertical border
-border_c:       .string "+"                     // Corner
 
 // Player character
 player_char:    .string "@"                     // Player symbol
@@ -239,6 +242,7 @@ game_loop:
                 // Level up! Generate upgrade choices and switch state
                 bl      play_bell               // Sound effect
                 bl      upgrades_generate_choices
+                bl      screen_invalidate       // Menu covers the field
                 mov     game_state, STATE_LEVELUP
 
 game_loop_render:
@@ -281,6 +285,7 @@ game_return_menu:
                 adrp    x0, menu_selection
                 add     x0, x0, :lo12:menu_selection
                 str     wzr, [x0]
+                bl      screen_invalidate       // Whole screen changes here
                 mov     game_state, STATE_MENU
                 b       game_loop
 
@@ -295,6 +300,7 @@ game_restart:
                 bl      abilities_init
                 bl      achievements_init
                 bl      save_start_game
+                bl      screen_invalidate       // Whole screen changes here
                 mov     game_state, STATE_PLAYING
                 mov     frame_count, 0
                 b       game_loop
@@ -339,6 +345,7 @@ intro_finish:
                 str     wzr, [x0]
 
                 // Transition to menu
+                bl      screen_invalidate       // Whole screen changes here
                 mov     game_state, STATE_MENU
                 b       game_loop
 
@@ -421,6 +428,7 @@ menu_start_game:
                 bl      abilities_init
                 bl      achievements_init
                 bl      save_start_game
+                bl      screen_invalidate       // Whole screen changes here
                 mov     game_state, STATE_PLAYING
                 mov     frame_count, 0
                 b       game_loop
@@ -487,18 +495,21 @@ game_loop_levelup:
 select_upgrade_1:
                 mov     w0, 0                   // Choice 0
                 bl      upgrades_apply
+                bl      screen_invalidate       // Menu comes back off
                 mov     game_state, STATE_PLAYING
                 b       game_loop_render
 
 select_upgrade_2:
                 mov     w0, 1                   // Choice 1
                 bl      upgrades_apply
+                bl      screen_invalidate       // Menu comes back off
                 mov     game_state, STATE_PLAYING
                 b       game_loop_render
 
 select_upgrade_3:
                 mov     w0, 2                   // Choice 2
                 bl      upgrades_apply
+                bl      screen_invalidate       // Menu comes back off
                 mov     game_state, STATE_PLAYING
                 b       game_loop_render
 
@@ -518,21 +529,19 @@ game_loop_paused:
                 b       game_loop
 
 game_resume:
+                bl      screen_invalidate       // Overlay comes back off
                 mov     game_state, STATE_PLAYING
                 bl      frame_delay
                 b       game_loop
 
 // ============== EXIT ==============
 main_exit:
-                // Show exit message
-                mov     w0, 0                   // Column
-                mov     w1, SCREEN_HEIGHT       // Bottom row
-                bl      cursor_move             // Move cursor
-                bl      reset_color             // Reset colors
+                // The frame buffer is done with; these go straight out
+                bl      screen_end              // Park the cursor, drop colour
 
                 adrp    x0, msg_exit            // Exit message
                 add     x0, x0, :lo12:msg_exit
-                bl      write_str               // Print message
+                bl      write_str_raw           // Print message
 
                 // Restore terminal
                 bl      terminal_restore        // Restore settings
@@ -540,7 +549,7 @@ main_exit:
                 // Print goodbye
                 adrp    x0, msg_goodbye         // Goodbye message
                 add     x0, x0, :lo12:msg_goodbye
-                bl      write_str               // Print message
+                bl      write_str_raw           // Print message
 
                 mov     w0, 0                   // Return code 0
                 b       main_cleanup
@@ -608,6 +617,7 @@ handle_pause:
                 // Only a live game pauses; the paused loop handles resuming
                 cmp     game_state, STATE_PLAYING
                 b.ne    handle_input_done
+                bl      screen_invalidate       // Overlay covers the field
                 mov     game_state, STATE_PAUSED
                 mov     key_pressed, KEY_NONE   // Spend the key, or pause ends
                 b       handle_input_done       //   on the frame that began it
@@ -730,6 +740,7 @@ player_died:
                 mul     w0, w0, w4              // Score again for w0
                 bl      save_end_game           // Save and get rank
 
+                bl      screen_invalidate       // Whole screen changes here
                 mov     game_state, STATE_GAMEOVER
                 // NOTE: Don't restore x19 here - we WANT game_state to stay as STATE_GAMEOVER
                 ldp     fp, lr, [sp], 32
@@ -786,7 +797,7 @@ draw_screen:
                 mov     w21, frame_count
                 mov     w22, key_pressed
 
-                // Move cursor home (avoid full clear for less flicker)
+                // Stage from the top of the frame
                 bl      cursor_home
 
                 // Draw title bar
@@ -797,105 +808,9 @@ draw_screen:
                 add     x0, x0, :lo12:msg_title
                 bl      write_str
 
-                mov     w0, '\n'                // Newline
-                bl      write_char
+                // Borders, empty field and the two spacer rows
+                bl      draw_frame_chrome
 
-                // Draw top border
-                mov     w0, COLOR_GREEN         // Border color
-                bl      set_color
-                bl      draw_top_border
-
-                // Draw middle area (play field)
-                // Draw rows from 4 to (SCREEN_HEIGHT - 4) = rows 4-19
-                mov     w24, 4                  // Current row (use w24 as temp)
-
-draw_field_loop:
-                // Check if done: row >= SCREEN_HEIGHT - 4
-                mov     w0, SCREEN_HEIGHT
-                sub     w0, w0, 4               // w0 = 20 (last row to draw)
-                cmp     w24, w0                 // Compare current row with limit
-                b.ge    draw_bottom             // Done if row >= 20
-
-                // Draw left border
-                mov     w0, COLOR_GREEN
-                bl      set_color
-
-                adrp    x0, border_v
-                add     x0, x0, :lo12:border_v
-                bl      write_str
-
-                // Draw spaces for field (78 spaces between borders)
-                mov     w0, COLOR_BLACK
-                bl      set_color
-
-                mov     w25, 1                  // Column counter (use w25)
-draw_row_spaces:
-                cmp     w25, SCREEN_WIDTH
-                sub     w0, w25, 1              // Check if col >= WIDTH-1
-                b.ge    draw_row_end
-
-                mov     w0, ' '                 // Space character
-                bl      write_char
-
-                add     w25, w25, 1             // Next column
-                b       draw_row_spaces
-
-draw_row_end:
-                // Draw right border
-                mov     w0, COLOR_GREEN
-                bl      set_color
-
-                adrp    x0, border_v
-                add     x0, x0, :lo12:border_v
-                bl      write_str
-
-                mov     w0, '\n'
-                bl      write_char
-
-                // Next row
-                add     w24, w24, 1
-                b       draw_field_loop
-
-draw_bottom:
-                // Draw bottom border
-                bl      draw_bottom_border
-
-                // Clear rows 20 and 21 to remove stale menu text and garbage
-                // Row 20 (below border - clear any leftover menu text)
-                mov     w0, 0
-                mov     w1, SCREEN_HEIGHT
-                sub     w1, w1, 4               // Row 20
-                bl      cursor_move
-
-                mov     w0, COLOR_BLACK
-                bl      set_color
-
-                mov     w25, 0
-clear_row_20:
-                cmp     w25, SCREEN_WIDTH
-                b.ge    clear_row_20_done
-                mov     w0, ' '
-                bl      write_char
-                add     w25, w25, 1
-                b       clear_row_20
-
-clear_row_20_done:
-                // Row 21 (between border and status bar)
-                mov     w0, 0
-                mov     w1, SCREEN_HEIGHT
-                sub     w1, w1, 3               // Row 21
-                bl      cursor_move
-
-                mov     w25, 0
-clear_row_21:
-                cmp     w25, SCREEN_WIDTH
-                b.ge    clear_row_21_done
-                mov     w0, ' '
-                bl      write_char
-                add     w25, w25, 1
-                b       clear_row_21
-
-clear_row_21_done:
                 // Draw enemies first (so player appears on top)
                 bl      enemies_draw
 
@@ -983,82 +898,93 @@ draw_status_done:
                 ret
 
 // ============================================================================
-// draw_top_border - Draw top border line
+// draw_frame_chrome - Borders, the empty play field and the spacer rows
+// Whole-row fills: the field costs a few hundred steps instead of the twelve
+// hundred single-character writes the sequential version needed.
 // ============================================================================
-draw_top_border:
+draw_frame_chrome:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
                 str     x19, [sp, 16]
 
-                // Corner
-                adrp    x0, border_c
-                add     x0, x0, :lo12:border_c
-                bl      write_str
+                mov     w0, ROW_TOP_BORDER
+                bl      draw_border_row
 
-                // Horizontal line
-                mov     w19, 1                  // Column counter
-draw_top_loop:
-                cmp     w19, SCREEN_WIDTH
-                sub     w0, w19, 1
-                b.ge    draw_top_end
+                mov     w19, ROW_FIELD_FIRST
+draw_chrome_field:
+                cmp     w19, ROW_FIELD_LAST
+                b.gt    draw_chrome_bottom
 
-                adrp    x0, border_h
-                add     x0, x0, :lo12:border_h
-                bl      write_str
+                // Blank interior, then a wall at each end
+                mov     w0, w19
+                mov     w1, ' '
+                mov     w2, COLOR_BLACK
+                bl      fb_fill_row
+
+                mov     w0, COLOR_GREEN
+                bl      set_color
+
+                mov     w0, 0
+                mov     w1, w19
+                bl      cursor_move
+                mov     w0, '|'
+                bl      write_char
+
+                mov     w0, SCREEN_WIDTH - 1
+                mov     w1, w19
+                bl      cursor_move
+                mov     w0, '|'
+                bl      write_char
 
                 add     w19, w19, 1
-                b       draw_top_loop
+                b       draw_chrome_field
 
-draw_top_end:
-                // Corner
-                adrp    x0, border_c
-                add     x0, x0, :lo12:border_c
-                bl      write_str
+draw_chrome_bottom:
+                mov     w0, ROW_BOTTOM_BORDER
+                bl      draw_border_row
 
-                mov     w0, '\n'
-                bl      write_char
+                // Two spacer rows keep stale menu text off the screen
+                mov     w0, SCREEN_HEIGHT - 4
+                mov     w1, ' '
+                mov     w2, COLOR_BLACK
+                bl      fb_fill_row
+
+                mov     w0, SCREEN_HEIGHT - 3
+                mov     w1, ' '
+                mov     w2, COLOR_BLACK
+                bl      fb_fill_row
 
                 ldr     x19, [sp, 16]
                 ldp     fp, lr, [sp], 32
                 ret
 
 // ============================================================================
-// draw_bottom_border - Draw bottom border line
+// draw_border_row - One horizontal border with a corner at each end
+// Parameters: w0 = row
 // ============================================================================
-draw_bottom_border:
+draw_border_row:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
                 str     x19, [sp, 16]
 
+                mov     w19, w0                 // Remember the row
+                mov     w1, '-'
+                mov     w2, COLOR_GREEN
+                bl      fb_fill_row
+
                 mov     w0, COLOR_GREEN
                 bl      set_color
 
-                // Corner
-                adrp    x0, border_c
-                add     x0, x0, :lo12:border_c
-                bl      write_str
+                mov     w0, 0
+                mov     w1, w19
+                bl      cursor_move
+                mov     w0, '+'
+                bl      write_char
 
-                // Horizontal line
-                mov     w19, 1
-draw_bot_loop:
-                cmp     w19, SCREEN_WIDTH
-                sub     w0, w19, 1
-                b.ge    draw_bot_end
-
-                adrp    x0, border_h
-                add     x0, x0, :lo12:border_h
-                bl      write_str
-
-                add     w19, w19, 1
-                b       draw_bot_loop
-
-draw_bot_end:
-                // Corner
-                adrp    x0, border_c
-                add     x0, x0, :lo12:border_c
-                bl      write_str
-
-                mov     w0, '\n'
+                mov     w0, SCREEN_WIDTH - 1
+                mov     w1, w19
+                bl      cursor_move
+                mov     w0, '+'
                 bl      write_char
 
                 ldr     x19, [sp, 16]
@@ -1071,6 +997,10 @@ draw_bot_end:
 frame_delay:
                 stp     fp, lr, [sp, -16]!
                 mov     fp, sp
+
+                // Every render path reaches the loop through here, so this is
+                // the one place the staged frame goes out to the terminal.
+                bl      screen_flush
 
                 // Simple fixed delay for now
                 // Future: calculate actual sleep based on elapsed time
@@ -1838,9 +1768,11 @@ play_bell:
                 stp     fp, lr, [sp, -16]!
                 mov     fp, sp
 
+                // The bell is a terminal event, not a cell, so it skips the
+                // frame buffer and goes out on its own.
                 adrp    x0, bell_char
                 add     x0, x0, :lo12:bell_char
-                bl      write_str
+                bl      write_str_raw
 
                 ldp     fp, lr, [sp], 16
                 ret
