@@ -117,6 +117,20 @@ terminal_init:
                 cmp     x0, 0                   // Check for error
                 b.lt    terminal_init_fail      // Branch if failed
 
+                // VMIN/VTIME above is a tty setting, so a host that honours
+                // only the descriptor's own flags would still block in read().
+                // Ask for non-blocking stdin both ways.
+                mov     x0, STDIN               // File descriptor
+                mov     x1, F_GETFL             // Read current status flags
+                mov     x8, SYS_FCNTL           // fcntl syscall
+                svc     0                       // Execute syscall
+
+                orr     x2, x0, O_NONBLOCK      // Add the non-blocking bit
+                mov     x0, STDIN               // File descriptor
+                mov     x1, F_SETFL             // Write status flags back
+                mov     x8, SYS_FCNTL           // fcntl syscall
+                svc     0                       // Execute syscall
+
                 // Set initialized flag
                 adrp    x0, term_init           // Get flag address
                 add     x0, x0, :lo12:term_init
@@ -257,8 +271,9 @@ cursor_move:
                 mov     w1, w20                 // Row number
                 bl      write_num_to_buf        // Write number, returns new ptr
 
-                // Write semicolon
-                mov     w1, ';'                 // ; character
+                // Write semicolon (numeric: an assembler that treats ;
+                // as a comment would cut the line at the character form)
+                mov     w1, 59
                 strb    w1, [x0], 1             // Store and advance
 
                 // Convert column (x) to ASCII
