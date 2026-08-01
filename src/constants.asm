@@ -1,24 +1,36 @@
-/* constants.asm - Shared Constants and Definitions
-    @Author - Abdalla Eldoumani
-    * Central repository for all constants, syscall numbers,
-    * ANSI codes, and shared definitions used across modules
-*/
+// Shared constants for every deadzone module: screen geometry, syscall
+// numbers, termios and fcntl values, key codes, ANSI colours, frame timing,
+// game states and pool sizes. Included first so the rest can rely on them.
 
-// ============== REGISTER ALIASES (GLOBAL) ==============
-fp              .req    x29                     // Frame pointer
-lr              .req    x30                     // Link register
+define(fp, x29)
+define(lr, x30)
 
-// ============== SCREEN DIMENSIONS ==============
+// Screen dimensions
 SCREEN_WIDTH = 80                               // Terminal width in columns
 SCREEN_HEIGHT = 24                              // Terminal height in rows
 SCREEN_SIZE = SCREEN_WIDTH * SCREEN_HEIGHT      // Total screen characters
 
-// ============== FILE DESCRIPTORS ==============
+// Play screen rows
+// A marquee on row 0, the arena between the two rules, then the four-row
+// status bar along the bottom. The field has to stop at ROW_FIELD_LAST for
+// the bar to fit, and player.asm bounds the player inside those rows.
+ROW_MARQUEE = 0                                 // Game name, dark band
+ROW_TOP_BORDER = 1                              // Top rule of the arena
+ROW_FIELD_FIRST = 2                             // First playable row
+ROW_FIELD_LAST = 17                             // Last playable row
+ROW_BOTTOM_BORDER = 18                          // Bottom rule of the arena
+ROW_BAR_TOP = 20                                // Status bar upper rule
+ROW_BAR_STATS = 21                              // Health, wave, kills, level
+ROW_BAR_ABILITIES = 22                          // The two ability charges
+ROW_BAR_BOTTOM = 23                             // Status bar lower rule
+
+// File descriptors
 STDIN = 0                                       // Standard input
 STDOUT = 1                                      // Standard output
 STDERR = 2                                      // Standard error
 
-// ============== LINUX SYSCALL NUMBERS (AArch64) ==============
+// Linux syscall numbers (AArch64)
+SYS_FCNTL = 25                                  // fcntl(fd, cmd, arg)
 SYS_IOCTL = 29                                  // ioctl(fd, request, arg)
 SYS_OPENAT = 56                                 // openat(dirfd, path, flags, mode)
 SYS_CLOSE = 57                                  // close(fd)
@@ -28,14 +40,14 @@ SYS_EXIT = 93                                   // exit(status)
 SYS_NANOSLEEP = 101                             // nanosleep(req, rem)
 SYS_CLOCK_GETTIME = 113                         // clock_gettime(clk_id, tp)
 
-// ============== CLOCK IDS ==============
+// Clock ids
 CLOCK_MONOTONIC = 1                             // Monotonic clock for timing
 
-// ============== IOCTL REQUESTS (termios) ==============
+// Ioctl requests (termios)
 TCGETS = 0x5401                                 // Get terminal attributes
 TCSETS = 0x5402                                 // Set terminal attributes
 
-// ============== TERMIOS STRUCTURE OFFSETS ==============
+// Termios structure offsets
 // struct termios size is 60 bytes on Linux ARM64
 TERMIOS_SIZE = 60                               // Size of termios structure
 TERMIOS_IFLAG = 0                               // Input flags offset (4 bytes)
@@ -46,7 +58,7 @@ TERMIOS_CC = 17                                 // Control characters offset
 TERMIOS_CC_VMIN = 6                             // VMIN index in c_cc array
 TERMIOS_CC_VTIME = 5                            // VTIME index in c_cc array
 
-// ============== TERMIOS FLAG VALUES ==============
+// Termios flag values
 // Local flags (c_lflag)
 ICANON = 0x0002                                 // Canonical mode
 ECHO = 0x0008                                   // Echo input
@@ -57,7 +69,12 @@ IEXTEN = 0x8000                                 // Extended input processing
 ICRNL = 0x0100                                  // Map CR to NL
 IXON = 0x0400                                   // Enable XON/XOFF flow control
 
-// ============== KEY CODES ==============
+// Fcntl commands and file status flags
+F_GETFL = 3                                     // Read the file status flags
+F_SETFL = 4                                     // Write the file status flags
+O_NONBLOCK = 0x800                              // Reads return instead of waiting
+
+// Key codes
 KEY_NONE = -1                                   // No key pressed
 KEY_ESC = 27                                    // Escape key
 KEY_SPACE = 32                                  // Space bar
@@ -91,7 +108,7 @@ KEY_ARROW_DOWN = 66                             // Down arrow (ESC [ B)
 KEY_ARROW_RIGHT = 67                            // Right arrow (ESC [ C)
 KEY_ARROW_LEFT = 68                             // Left arrow (ESC [ D)
 
-// ============== ANSI COLOR CODES ==============
+// Ansi color codes
 COLOR_RESET = 0                                 // Reset all attributes
 COLOR_BLACK = 30                                // Black foreground
 COLOR_RED = 31                                  // Red foreground
@@ -112,6 +129,14 @@ COLOR_BRIGHT_MAGENTA = 95                       // Bright magenta
 COLOR_BRIGHT_CYAN = 96                          // Bright cyan
 COLOR_BRIGHT_WHITE = 97                         // Bright white
 
+// Roles the colours play on screen. Everything structural is dim grey so the
+// enemies, the player and the gauges are the only bright things in the frame.
+CHROME_COLOR = COLOR_BRIGHT_BLACK               // Walls, rules, meter tracks
+FLOOR_COLOR = COLOR_BRIGHT_BLACK                // Rubble on the deck
+LABEL_COLOR = COLOR_RED                         // Status bar field names
+VALUE_COLOR = COLOR_BRIGHT_WHITE                // Status bar numbers
+WALL_GLYPH = '#'                                // Arena wall and rule
+
 // Background colors (add 10 to foreground)
 BG_BLACK = 40                                   // Black background
 BG_RED = 41                                     // Red background
@@ -122,12 +147,12 @@ BG_MAGENTA = 45                                 // Magenta background
 BG_CYAN = 46                                    // Cyan background
 BG_WHITE = 47                                   // White background
 
-// ============== GAME TIMING ==============
+// Game timing
 TARGET_FPS = 30                                 // Target frames per second
 FRAME_TIME_NS = 33333333                        // Nanoseconds per frame (1/30 sec)
 FRAME_TIME_SEC = 0                              // Seconds component of frame time
 
-// ============== GAME STATES ==============
+// Game states
 STATE_INTRO = 0                                 // Intro/title animation
 STATE_MENU = 1                                  // Main menu
 STATE_PLAYING = 2                               // Game in progress
@@ -136,22 +161,16 @@ STATE_GAMEOVER = 4                              // Game over screen
 STATE_QUIT = 5                                  // Exit game
 STATE_LEVELUP = 6                               // Level up selection screen
 
-// ============== ENTITY LIMITS ==============
+// Entity limits
 MAX_ENEMIES = 100                               // Maximum enemy count
 MAX_PROJECTILES = 50                            // Maximum projectile count
 MAX_PICKUPS = 30                                // Maximum pickup count
 
-// ============== PLAYER DEFAULTS ==============
-PLAYER_START_X = SCREEN_WIDTH / 2               // Starting X position
-PLAYER_START_Y = SCREEN_HEIGHT / 2              // Starting Y position
-PLAYER_START_HP = 100                           // Starting health
-PLAYER_START_SPEED = 1                          // Starting movement speed
-
-// ============== TIMESPEC STRUCTURE ==============
+// Timespec structure
 TIMESPEC_SIZE = 16                              // Size of timespec (8 + 8 bytes)
 TIMESPEC_SEC = 0                                // Offset to tv_sec
 TIMESPEC_NSEC = 8                               // Offset to tv_nsec
 
-// ============== BOOLEAN VALUES ==============
+// Boolean values
 FALSE = 0                                       // Boolean false
 TRUE = 1                                        // Boolean true

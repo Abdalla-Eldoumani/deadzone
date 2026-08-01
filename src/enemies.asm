@@ -1,12 +1,8 @@
-/* enemies.asm - Enemy Entity System
-    @Author - Abdalla Eldoumani
-    * Manages enemy spawning, AI movement, and rendering
-    * Uses a fixed-size entity pool for zombies
-    * Functions: enemies_init, enemies_spawn, enemies_update, enemies_draw
-    * NOTE: This file is included by main.asm via m4
-*/
+// Enemies: a fixed pool of zombies, runners and tanks that spawn from the
+// screen edges, walk toward the player, and advance the wave when enough die.
+// Also holds the linear congruential generator the whole game draws from.
 
-// ============== ENEMY STRUCTURE OFFSETS ==============
+// Enemy structure offsets
 ENEMY_ACTIVE = 0                                // Active flag (1 byte)
 ENEMY_TYPE = 1                                  // Enemy type (1 byte)
 ENEMY_X = 2                                     // X position (2 bytes, signed)
@@ -18,13 +14,13 @@ ENEMY_XP_VALUE = 9                              // XP when killed (1 byte)
 ENEMY_PADDING = 10                              // Padding (6 bytes)
 ENEMY_STRUCT_SIZE = 16                          // Total struct size
 
-// ============== ENEMY TYPES ==============
+// Enemy types
 ENEMY_TYPE_NONE = 0                             // Empty slot
 ENEMY_TYPE_ZOMBIE = 1                           // Basic zombie - slow, weak
 ENEMY_TYPE_RUNNER = 2                           // Fast zombie - quick, weak
 ENEMY_TYPE_TANK = 3                             // Tank zombie - slow, tough
 
-// ============== ENEMY STATS ==============
+// Enemy stats
 // Zombie (basic)
 ZOMBIE_HEALTH = 3                               // Takes 3 hits
 ZOMBIE_SPEED = 8                                // Move every 8 frames
@@ -43,12 +39,11 @@ TANK_SPEED = 12                                 // Move every 12 frames
 TANK_XP = 50                                    // 50 XP when killed
 TANK_CHAR = 'Z'                                 // Display character
 
-// ============== SPAWN SETTINGS ==============
+// Spawn settings
 SPAWN_TIMER_INIT = 60                           // Frames between spawns (~2 sec)
 SPAWN_TIMER_MIN = 15                            // Minimum spawn delay
 ENEMIES_PER_WAVE = 5                            // Base enemies per wave
 
-// ============== DATA SECTION ==============
                 .data
 
 // Enemy pool (MAX_ENEMIES * ENEMY_STRUCT_SIZE bytes)
@@ -65,13 +60,10 @@ wave_target:    .word   ENEMIES_PER_WAVE        // Kills needed for next wave
 // Simple random state (LCG)
 random_state:   .word   12345                   // Random seed
 
-// ============== TEXT SECTION ==============
                 .text
                 .balign 4
 
-// ============================================================================
 // enemies_init - Initialize enemy system
-// ============================================================================
                 .global enemies_init
 enemies_init:
                 stp     fp, lr, [sp, -16]!
@@ -119,10 +111,8 @@ enemies_init_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // enemies_get_count - Get active enemy count
 // Returns: w0 = enemy count
-// ============================================================================
                 .global enemies_get_count
 enemies_get_count:
                 adrp    x0, enemy_count
@@ -130,10 +120,8 @@ enemies_get_count:
                 ldr     w0, [x0]
                 ret
 
-// ============================================================================
 // enemies_get_wave - Get current wave number
 // Returns: w0 = wave number
-// ============================================================================
                 .global enemies_get_wave
 enemies_get_wave:
                 adrp    x0, current_wave
@@ -141,10 +129,8 @@ enemies_get_wave:
                 ldr     w0, [x0]
                 ret
 
-// ============================================================================
 // random_next - Get next random number (simple LCG)
 // Returns: w0 = random value
-// ============================================================================
 random_next:
                 adrp    x0, random_state
                 add     x0, x0, :lo12:random_state
@@ -158,18 +144,16 @@ random_next:
                 mul     w1, w1, w2
                 mov     w2, 12345
                 add     w1, w1, w2
-                // Mod 2^31 = clear top bit
-                bic     w1, w1, 0x80000000      // Clear bit 31
+                // Mod 2^31 = keep the low 31 bits (AArch64 has no BIC immediate)
+                and     w1, w1, 0x7fffffff      // Clear bit 31
 
-                str     w1, [x0]                // Store new state
-                mov     w0, w1                  // Return value
+                str     w1, [x0]
+                mov     w0, w1
                 ret
 
-// ============================================================================
 // random_range - Get random number in range [0, max)
 // Parameters: w0 = max (exclusive)
 // Returns: w0 = random value in range
-// ============================================================================
 random_range:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
@@ -184,10 +168,8 @@ random_range:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // enemies_find_slot - Find empty slot in enemy pool
 // Returns: x0 = pointer to slot, or 0 if full
-// ============================================================================
 enemies_find_slot:
                 adrp    x0, enemy_pool
                 add     x0, x0, :lo12:enemy_pool
@@ -206,11 +188,9 @@ find_slot_full:
 find_slot_found:
                 ret
 
-// ============================================================================
 // enemies_spawn_one - Spawn a single enemy at random edge
 // Parameters: w0 = enemy type
 // Returns: w0 = 1 if spawned, 0 if pool full
-// ============================================================================
                 .global enemies_spawn_one
 enemies_spawn_one:
                 stp     fp, lr, [sp, -48]!
@@ -218,12 +198,12 @@ enemies_spawn_one:
                 stp     x19, x20, [sp, 16]
                 str     x21, [sp, 32]
 
-                mov     w19, w0                 // Save enemy type
+                mov     w19, w0
 
                 // Find empty slot
                 bl      enemies_find_slot
                 cbz     x0, spawn_fail
-                mov     x20, x0                 // Save slot pointer
+                mov     x20, x0
 
                 // Set active and type
                 mov     w0, 1
@@ -337,11 +317,11 @@ spawn_success:
                 add     w1, w1, 1
                 str     w1, [x0]
 
-                mov     w0, 1                   // Return success
+                mov     w0, 1
                 b       spawn_done
 
 spawn_fail:
-                mov     w0, 0                   // Return failure
+                mov     w0, 0
 
 spawn_done:
                 ldr     x21, [sp, 32]
@@ -349,11 +329,9 @@ spawn_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // enemies_spawn_at - Spawn enemy at specific position (for boss minions)
 // Parameters: w0 = x, w1 = y, w2 = enemy type
 // Returns: w0 = 1 if spawned, 0 if pool full
-// ============================================================================
                 .global enemies_spawn_at
 enemies_spawn_at:
                 stp     fp, lr, [sp, -48]!
@@ -361,14 +339,14 @@ enemies_spawn_at:
                 stp     x19, x20, [sp, 16]
                 stp     x21, x22, [sp, 32]
 
-                mov     w19, w0                 // Save X
-                mov     w20, w1                 // Save Y
+                mov     w19, w0
+                mov     w20, w1
                 mov     w21, w2                 // Save type
 
                 // Find empty slot
                 bl      enemies_find_slot
                 cbz     x0, spawn_at_fail
-                mov     x22, x0                 // Save slot pointer
+                mov     x22, x0
 
                 // Set active and type
                 mov     w0, 1
@@ -440,9 +418,7 @@ spawn_at_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // enemies_update - Update all enemies (movement toward player)
-// ============================================================================
                 .global enemies_update
 enemies_update:
                 stp     fp, lr, [sp, -64]!
@@ -457,9 +433,9 @@ enemies_update:
 
                 // Get player position
                 bl      player_get_x
-                mov     w22, w0                 // Player X
+                mov     w22, w0
                 bl      player_get_y
-                mov     w23, w0                 // Player Y
+                mov     w23, w0
 
                 // Iterate through enemy pool
                 adrp    x19, enemy_pool
@@ -538,9 +514,7 @@ update_done:
                 ldp     fp, lr, [sp], 64
                 ret
 
-// ============================================================================
 // enemies_try_spawn - Try to spawn new enemies based on timer
-// ============================================================================
 enemies_try_spawn:
                 stp     fp, lr, [sp, -16]!
                 mov     fp, sp
@@ -605,9 +579,7 @@ try_spawn_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // enemies_draw - Draw all active enemies
-// ============================================================================
                 .global enemies_draw
 enemies_draw:
                 stp     fp, lr, [sp, -48]!
@@ -645,19 +617,20 @@ draw_loop:
                 b       draw_zombie_color       // Default
 
 draw_zombie_color:
-                mov     w0, COLOR_GREEN
+                // The tiers run up the heat scale: dull red, hot red, molten
+                mov     w0, COLOR_RED
                 bl      set_color
                 mov     w0, ZOMBIE_CHAR
                 b       draw_enemy_char
 
 draw_runner_color:
-                mov     w0, COLOR_CYAN
+                mov     w0, COLOR_BRIGHT_RED
                 bl      set_color
                 mov     w0, RUNNER_CHAR
                 b       draw_enemy_char
 
 draw_tank_color:
-                mov     w0, COLOR_RED
+                mov     w0, COLOR_BRIGHT_YELLOW
                 bl      set_color
                 mov     w0, TANK_CHAR
 
@@ -675,114 +648,60 @@ draw_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
-// enemies_kill - Kill an enemy at given slot index
-// Parameters: w0 = slot index
-// Returns: w0 = XP value of killed enemy
-// ============================================================================
-                .global enemies_kill
-enemies_kill:
-                stp     fp, lr, [sp, -16]!
-                mov     fp, sp
-
-                // Get slot pointer
-                adrp    x1, enemy_pool
-                add     x1, x1, :lo12:enemy_pool
-                mov     w2, ENEMY_STRUCT_SIZE
-                mul     w2, w0, w2
-                add     x1, x1, x2
-
-                // Get XP value before killing
-                ldrb    w0, [x1, ENEMY_XP_VALUE]
-
-                // Deactivate enemy
-                mov     w2, 0
-                strb    w2, [x1, ENEMY_ACTIVE]
-
-                // Decrement count
-                adrp    x1, enemy_count
-                add     x1, x1, :lo12:enemy_count
-                ldr     w2, [x1]
-                sub     w2, w2, 1
-                str     w2, [x1]
-
-                // Increment wave kills
-                adrp    x1, wave_kills
-                add     x1, x1, :lo12:wave_kills
-                ldr     w2, [x1]
-                add     w2, w2, 1
-                str     w2, [x1]
-
-                // Check for wave completion
-                adrp    x1, wave_target
-                add     x1, x1, :lo12:wave_target
-                ldr     w3, [x1]
-                cmp     w2, w3
-                b.lt    kill_done
-
-                // Wave complete! Advance to next wave
-                adrp    x1, current_wave
-                add     x1, x1, :lo12:current_wave
-                ldr     w2, [x1]
-                add     w2, w2, 1
-                str     w2, [x1]
-
-                // Reset wave kills
-                adrp    x1, wave_kills
-                add     x1, x1, :lo12:wave_kills
-                mov     w2, 0
-                str     w2, [x1]
-
-                // Increase wave target
-                adrp    x1, wave_target
-                add     x1, x1, :lo12:wave_target
-                ldr     w2, [x1]
-                add     w2, w2, ENEMIES_PER_WAVE
-                str     w2, [x1]
-
-kill_done:
-                ldp     fp, lr, [sp], 16
-                ret
-
-// ============================================================================
 // enemies_check_collision - Check if position hits an enemy
 // Parameters: w0 = x, w1 = y
 // Returns: w0 = slot index if hit, or -1 if no hit
-// ============================================================================
                 .global enemies_check_collision
 enemies_check_collision:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
                 stp     x19, x20, [sp, 16]
 
-                mov     w19, w0                 // Save X
-                mov     w20, w1                 // Save Y
+                mov     w19, w0
+                mov     w20, w1
+
+                // Every live projectile runs this scan every frame, so it pays
+                // to stop as soon as the pool cannot hold another live enemy.
+                // enemy_count is kept in step with ENEMY_ACTIVE at every spawn,
+                // kill and bomb, so once that many active slots have been seen
+                // the rest of the pool is empty.
+                adrp    x3, enemy_count
+                add     x3, x3, :lo12:enemy_count
+                ldr     w3, [x3]                // Live enemies remaining
+                cmp     w3, 0
+                b.le    collision_none
 
                 adrp    x0, enemy_pool
                 add     x0, x0, :lo12:enemy_pool
-                mov     w1, 0                   // Slot index
+                mov     w1, 0
 
 collision_loop:
                 cmp     w1, MAX_ENEMIES
                 b.ge    collision_none
 
-                // Check if active
+                // Dead slots are the common case, so reject them first
                 ldrb    w2, [x0, ENEMY_ACTIVE]
                 cbz     w2, collision_next
 
-                // Check X
+                // One live enemy accounted for
+                sub     w3, w3, 1
+
+                // Single-axis reject before touching the second coordinate
                 ldrsh   w2, [x0, ENEMY_X]
                 cmp     w2, w19
-                b.ne    collision_next
+                b.ne    collision_seen
 
                 // Check Y
                 ldrsh   w2, [x0, ENEMY_Y]
                 cmp     w2, w20
-                b.ne    collision_next
+                b.ne    collision_seen
 
                 // Hit!
                 mov     w0, w1
                 b       collision_done
+
+collision_seen:
+                cbz     w3, collision_none      // No live enemies left to find
 
 collision_next:
                 add     x0, x0, ENEMY_STRUCT_SIZE

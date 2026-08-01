@@ -1,12 +1,7 @@
-/* boss.asm - Boss Battle System
-    @Author - Abdalla Eldoumani
-    * Manages boss entities with multi-phase AI
-    * Boss types: Titan (wave 10)
-    * Features: ASCII art sprites, health bars, attack patterns
-    * NOTE: This file is included by main.asm via m4
-*/
+// The Titan, the wave 10 boss: a five-state AI, two phases, a sprite and a
+// health bar across the top rule, and the minions it spawns while attacking.
 
-// ============== BOSS STRUCTURE OFFSETS ==============
+// Boss structure offsets
 BOSS_ACTIVE = 0                                 // Active flag (1 byte)
 BOSS_TYPE = 1                                   // Boss type (1 byte)
 BOSS_X = 2                                      // X position (2 bytes)
@@ -22,22 +17,22 @@ BOSS_FLAGS = 18                                 // Flags (2 bytes)
 BOSS_PADDING = 20                               // Padding (4 bytes)
 BOSS_STRUCT_SIZE = 24                           // Total size
 
-// ============== BOSS TYPES ==============
+// Boss types
 BOSS_TYPE_NONE = 0
 BOSS_TYPE_TITAN = 1                             // Wave 10 boss
 
-// ============== BOSS AI STATES ==============
+// Boss AI states
 BOSS_STATE_IDLE = 0                             // Standing still
 BOSS_STATE_MOVING = 1                           // Moving toward player
 BOSS_STATE_CHARGING = 2                         // Charging attack
 BOSS_STATE_ATTACKING = 3                        // Executing attack
 BOSS_STATE_STUNNED = 4                          // Stunned after damage
 
-// ============== BOSS PHASES ==============
+// Boss phases
 BOSS_PHASE_NORMAL = 0                           // Normal phase (>50% HP)
 BOSS_PHASE_ENRAGED = 1                          // Enraged phase (<50% HP)
 
-// ============== TITAN STATS ==============
+// Titan stats
 TITAN_MAX_HP = 500                              // High HP
 TITAN_MOVE_SPEED = 20                           // Move every 20 frames
 TITAN_ATTACK_CD = 60                            // Attack every 2 seconds
@@ -46,10 +41,9 @@ TITAN_XP = 500                                  // XP when killed
 TITAN_WIDTH = 5                                 // Sprite width
 TITAN_HEIGHT = 3                                // Sprite height
 
-// ============== SPAWN SETTINGS ==============
+// Spawn settings
 BOSS_WAVE_TITAN = 10                            // Spawn Titan at wave 10
 
-// ============== DATA SECTION ==============
                 .data
 
 // Boss entity data
@@ -60,10 +54,7 @@ boss_data:      .skip   BOSS_STRUCT_SIZE
 boss_active:    .word   0
 
 // Boss health bar characters
-boss_hp_full:   .byte   '#'
-boss_hp_empty:  .byte   '-'
 
-// ============== TEXT SECTION ==============
                 .text
 
 // Titan ASCII art sprite (5x3)
@@ -82,9 +73,7 @@ boss_hp_slash:  .string "/"
 
                 .balign 4
 
-// ============================================================================
 // boss_init - Initialize boss system
-// ============================================================================
                 .global boss_init
 boss_init:
                 stp     fp, lr, [sp, -16]!
@@ -111,10 +100,8 @@ boss_init_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // boss_check_spawn - Check if boss should spawn based on wave
 // Parameters: w0 = current wave
-// ============================================================================
                 .global boss_check_spawn
 boss_check_spawn:
                 stp     fp, lr, [sp, -16]!
@@ -138,17 +125,15 @@ boss_check_spawn_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // boss_spawn - Spawn a boss
 // Parameters: w0 = boss type
-// ============================================================================
                 .global boss_spawn
 boss_spawn:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
                 str     x19, [sp, 16]
 
-                mov     w19, w0                 // Save boss type
+                mov     w19, w0
 
                 // Get boss data address
                 adrp    x0, boss_data
@@ -208,13 +193,14 @@ boss_spawn_common:
                 bl      play_bell
                 bl      play_bell
 
+                // The health bar takes over the top rule, so repaint in full
+                bl      screen_invalidate
+
                 ldr     x19, [sp, 16]
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // boss_update - Update boss AI and state
-// ============================================================================
                 .global boss_update
 boss_update:
                 stp     fp, lr, [sp, -48]!
@@ -297,9 +283,9 @@ boss_do_move:
 
                 // Move toward player
                 bl      player_get_x
-                mov     w20, w0                 // Player X
+                mov     w20, w0
                 bl      player_get_y
-                mov     w21, w0                 // Player Y
+                mov     w21, w0
 
                 ldrsh   w22, [x19, BOSS_X]      // Boss X
 
@@ -395,9 +381,7 @@ boss_update_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // boss_spawn_minions - Spawn minion enemies near boss
-// ============================================================================
 boss_spawn_minions:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
@@ -435,9 +419,7 @@ spawn_minions_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // boss_draw - Draw boss and health bar
-// ============================================================================
                 .global boss_draw
 boss_draw:
                 stp     fp, lr, [sp, -48]!
@@ -601,18 +583,16 @@ boss_draw_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // boss_damage - Apply damage to boss
 // Parameters: w0 = damage amount
 // Returns: w0 = XP if killed, 0 otherwise
-// ============================================================================
                 .global boss_damage
 boss_damage:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
                 str     x19, [sp, 16]
 
-                mov     w19, w0                 // Save damage
+                mov     w19, w0
 
                 // Check if boss active
                 adrp    x0, boss_active
@@ -635,10 +615,10 @@ boss_damage:
                 // Stun briefly on hit
                 mov     w1, BOSS_STATE_STUNNED
                 strb    w1, [x0, BOSS_STATE]
-                mov     w1, 5                   // Short stun
+                mov     w1, 5
                 strh    w1, [x0, BOSS_TIMER]
 
-                mov     w0, 0                   // Not dead
+                mov     w0, 0
                 b       boss_damage_done
 
 boss_killed:
@@ -654,17 +634,24 @@ boss_killed:
                 add     x0, x0, :lo12:boss_active
                 str     wzr, [x0]
 
-                // Spawn big explosion
-                adrp    x0, boss_data
-                add     x0, x0, :lo12:boss_data
-                ldrsh   w0, [x0, BOSS_X]
-                add     w0, w0, 2               // Center
-                ldrsh   w1, [x0, BOSS_Y]
-                add     w1, w1, 1               // Center
+                // Three explosions at the boss centre. effects_spawn_explosion
+                // takes its coordinates in w0-w2 and is free to clobber them,
+                // so every call reloads them. The struct pointer sits in x2,
+                // which the type argument overwrites only after both loads.
+                // w19 held the damage; the epilogue restores it from the frame.
+                mov     w19, 3                  // Explosions left to spawn
+
+boss_death_boom:
+                adrp    x2, boss_data
+                add     x2, x2, :lo12:boss_data
+                ldrsh   w0, [x2, BOSS_X]
+                add     w0, w0, 2
+                ldrsh   w1, [x2, BOSS_Y]
+                add     w1, w1, 1
                 mov     w2, 0
                 bl      effects_spawn_explosion
-                bl      effects_spawn_explosion
-                bl      effects_spawn_explosion
+                subs    w19, w19, 1
+                b.ne    boss_death_boom
 
                 // Multiple bells for epic death
                 bl      play_bell
@@ -682,18 +669,16 @@ boss_damage_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // boss_check_collision - Check if position collides with boss
 // Parameters: w0 = x, w1 = y
 // Returns: w0 = 1 if collision, 0 otherwise
-// ============================================================================
                 .global boss_check_collision
 boss_check_collision:
                 stp     fp, lr, [sp, -16]!
                 mov     fp, sp
 
-                mov     w2, w0                  // Save X
-                mov     w3, w1                  // Save Y
+                mov     w2, w0
+                mov     w3, w1
 
                 // Check if boss active
                 adrp    x0, boss_active
@@ -730,16 +715,5 @@ boss_no_collision:
 
 boss_collision_done:
                 ldp     fp, lr, [sp], 16
-                ret
-
-// ============================================================================
-// boss_is_active - Check if boss is currently active
-// Returns: w0 = 1 if active, 0 otherwise
-// ============================================================================
-                .global boss_is_active
-boss_is_active:
-                adrp    x0, boss_active
-                add     x0, x0, :lo12:boss_active
-                ldr     w0, [x0]
                 ret
 

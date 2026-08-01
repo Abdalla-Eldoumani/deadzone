@@ -1,28 +1,20 @@
-/* abilities.asm - Special Abilities System
-    @Author - Abdalla Eldoumani
-    * Manages special abilities with cooldowns
-    * Abilities:
-    *   - Screen Clear Bomb (Spacebar): Kill all enemies, massive explosion
-    *   - Freeze (F key): Freeze all enemies for 3 seconds
-    * Functions: abilities_init, abilities_update, abilities_use_bomb,
-    *            abilities_use_freeze, abilities_draw_hud
-    * NOTE: This file is included by main.asm via m4
-*/
+// The two special abilities: the bomb that clears the screen and the freeze
+// that stops every enemy, both on cooldowns counted in frames.
 
-// ============== ABILITY CONSTANTS ==============
+// Ability constants
 ABILITY_BOMB = 1                                // Screen clear bomb
 ABILITY_FREEZE = 2                              // Freeze enemies
 
-// Cooldowns (in frames, ~60fps)
-BOMB_COOLDOWN = 1200                            // 20 seconds
-FREEZE_COOLDOWN = 900                           // 15 seconds
-FREEZE_DURATION = 180                           // 3 seconds
+// Cooldowns, counted in frames. Deriving them from TARGET_FPS keeps the
+// durations here and the seconds the HUD prints tied to the same frame rate.
+BOMB_COOLDOWN = 20 * TARGET_FPS                 // 20 seconds
+FREEZE_COOLDOWN = 15 * TARGET_FPS               // 15 seconds
+FREEZE_DURATION = 3 * TARGET_FPS                // 3 seconds
 
 // Key bindings
 KEY_BOMB = ' '                                  // Spacebar
 KEY_FREEZE = 'f'                                // F key
 
-// ============== DATA SECTION ==============
                 .data
                 .balign 4
 
@@ -34,24 +26,25 @@ freeze_cooldown: .word  0                       // Frames until freeze ready
 freeze_active:  .word   0                       // Is freeze active (1/0)
 freeze_timer:   .word   0                       // Frames remaining in freeze
 
-// ============== TEXT SECTION ==============
                 .text
 
 // Strings for HUD display
                 .balign 4
-ability_hud_fmt: .string "[SPACE]"
-ability_hud_bomb: .string "BOMB"
+ability_hud_fmt: .string "BOMB"
 ability_hud_ready: .string "READY"
-ability_hud_freeze_key: .string "[F]"
-ability_hud_freeze: .string "FREEZE"
-ability_hud_active: .string "ACTIVE!"
-ability_cooldown_fmt: .string "%ds"
+ability_hud_freeze_key: .string "FREEZE"
+ability_hud_active: .string "ACTIVE"
+
+// Charge gauges, the same idiom as the health bar
+ABILITY_METER_SEGMENTS = 10                     // Segments per charge gauge
+ABILITY_BOMB_LABEL_X = 2                        // Where the bomb field starts
+ABILITY_BOMB_X = 9                              // Its gauge
+ABILITY_FREEZE_LABEL_X = 39                     // Where the freeze field starts
+ABILITY_FREEZE_X = 46                           // Its gauge
 
                 .balign 4
 
-// ============================================================================
 // abilities_init - Initialize ability system
-// ============================================================================
                 .global abilities_init
 abilities_init:
                 stp     fp, lr, [sp, -16]!
@@ -79,10 +72,8 @@ abilities_init:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // abilities_update - Update cooldowns and freeze state
 // Called every frame
-// ============================================================================
                 .global abilities_update
 abilities_update:
                 stp     fp, lr, [sp, -16]!
@@ -132,17 +123,15 @@ abilities_update_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // abilities_check_input - Check for ability key presses
 // Parameters: w0 = key pressed
-// ============================================================================
                 .global abilities_check_input
 abilities_check_input:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
                 str     x19, [sp, 16]
 
-                mov     w19, w0                 // Save key
+                mov     w19, w0
 
                 // Check for bomb (spacebar)
                 cmp     w19, KEY_BOMB
@@ -161,10 +150,8 @@ abilities_input_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // abilities_use_bomb - Activate screen clear bomb
 // Kills all enemies on screen with massive explosion
-// ============================================================================
                 .global abilities_use_bomb
 abilities_use_bomb:
                 stp     fp, lr, [sp, -64]!
@@ -187,7 +174,7 @@ abilities_use_bomb:
                 adrp    x19, enemy_pool
                 add     x19, x19, :lo12:enemy_pool
                 mov     w20, MAX_ENEMIES
-                mov     w21, 0                  // Kill count
+                mov     w21, 0
 
 bomb_kill_loop:
                 cbz     w20, bomb_kill_done
@@ -246,8 +233,7 @@ bomb_kill_done:
                 str     w1, [x0]
 
                 // Play sound (bell)
-                mov     w0, 0x07                // ASCII bell
-                bl      write_char
+                bl      play_bell
 
 bomb_not_ready:
                 ldr     x23, [sp, 48]
@@ -256,10 +242,8 @@ bomb_not_ready:
                 ldp     fp, lr, [sp], 64
                 ret
 
-// ============================================================================
 // abilities_use_freeze - Activate freeze ability
 // Freezes all enemies for FREEZE_DURATION frames
-// ============================================================================
                 .global abilities_use_freeze
 abilities_use_freeze:
                 stp     fp, lr, [sp, -16]!
@@ -294,17 +278,14 @@ abilities_use_freeze:
                 str     w1, [x0]
 
                 // Play sound (bell)
-                mov     w0, 0x07                // ASCII bell
-                bl      write_char
+                bl      play_bell
 
 freeze_not_ready:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // abilities_is_frozen - Check if freeze is active
 // Returns: w0 = 1 if frozen, 0 if not
-// ============================================================================
                 .global abilities_is_frozen
 abilities_is_frozen:
                 adrp    x0, freeze_active
@@ -312,10 +293,9 @@ abilities_is_frozen:
                 ldr     w0, [x0]
                 ret
 
-// ============================================================================
-// abilities_draw_hud - Draw ability status on HUD
-// Shows cooldown status for bomb and freeze
-// ============================================================================
+// abilities_draw_hud - The two charge gauges on the status bar
+// Each gauge fills back up as its cooldown runs down, so the bar reads at a
+// glance instead of asking anyone to do arithmetic on a countdown.
                 .global abilities_draw_hud
 abilities_draw_hud:
                 stp     fp, lr, [sp, -48]!
@@ -323,134 +303,144 @@ abilities_draw_hud:
                 stp     x19, x20, [sp, 16]
                 stp     x21, x22, [sp, 32]
 
-                // Draw bomb status on last row
-                mov     w0, 2
-                mov     w1, SCREEN_HEIGHT - 1
+                mov     w0, ABILITY_BOMB_LABEL_X
+                mov     w1, ROW_BAR_ABILITIES
                 bl      cursor_move
-
-                // Draw [SPACE] label
-                mov     w0, COLOR_CYAN
+                mov     w0, LABEL_COLOR
                 bl      set_color
                 adrp    x0, ability_hud_fmt
                 add     x0, x0, :lo12:ability_hud_fmt
                 bl      write_str
 
-                // Check bomb cooldown
                 adrp    x0, bomb_cooldown
                 add     x0, x0, :lo12:bomb_cooldown
                 ldr     w19, [x0]
-
-                cbz     w19, bomb_status_ready
-
-                // On cooldown - show seconds remaining
-                mov     w0, COLOR_RED
-                bl      set_color
-
-                // Calculate seconds (frames / 60)
                 mov     w0, w19
-                mov     w1, 60
-                udiv    w0, w0, w1
-                add     w0, w0, 1               // Round up
+                mov     w1, BOMB_COOLDOWN
+                bl      ability_charge          // w0 = segments, w1 = colour
 
-                // Print cooldown number using write_num
-                bl      write_num
+                mov     w4, w1
+                mov     w3, w0
+                mov     w2, ABILITY_METER_SEGMENTS
+                mov     w0, ABILITY_BOMB_X
+                mov     w1, ROW_BAR_ABILITIES
+                bl      fb_meter
 
-                // Print 's' suffix and padding to clear "READY"/"ACTIVE!" leftovers
-                mov     w0, 's'
-                bl      write_char
-                mov     w0, ' '
-                bl      write_char
-                mov     w0, ' '
-                bl      write_char
-                mov     w0, ' '
-                bl      write_char
-                mov     w0, ' '
-                bl      write_char
-                b       draw_freeze_status
-
-bomb_status_ready:
-                // Ready - show READY in green
-                mov     w0, COLOR_GREEN
-                bl      set_color
-                adrp    x0, ability_hud_ready
-                add     x0, x0, :lo12:ability_hud_ready
-                bl      write_str
-
-draw_freeze_status:
-                // Draw freeze status next to bomb
-                mov     w0, 22
-                mov     w1, SCREEN_HEIGHT - 1
+                mov     w0, ABILITY_BOMB_X + ABILITY_METER_SEGMENTS + 3
+                mov     w1, ROW_BAR_ABILITIES
                 bl      cursor_move
+                mov     w0, w19
+                bl      ability_draw_state
 
-                // Draw [F] label
-                mov     w0, COLOR_CYAN
+                mov     w0, ABILITY_FREEZE_LABEL_X
+                mov     w1, ROW_BAR_ABILITIES
+                bl      cursor_move
+                mov     w0, LABEL_COLOR
                 bl      set_color
                 adrp    x0, ability_hud_freeze_key
                 add     x0, x0, :lo12:ability_hud_freeze_key
                 bl      write_str
 
-                // Check if freeze is active
+                // A live freeze shows a full gauge in its own colour; the rest
+                // of the time it charges the way the bomb does.
                 adrp    x0, freeze_active
                 add     x0, x0, :lo12:freeze_active
                 ldr     w20, [x0]
-                cbnz    w20, freeze_status_active
-
-                // Check freeze cooldown
                 adrp    x0, freeze_cooldown
                 add     x0, x0, :lo12:freeze_cooldown
                 ldr     w19, [x0]
 
-                cbz     w19, freeze_status_ready
+                cbz     w20, draw_freeze_charge
+                mov     w0, ABILITY_METER_SEGMENTS
+                mov     w1, COLOR_BRIGHT_CYAN
+                b       draw_freeze_meter
 
-                // On cooldown
-                mov     w0, COLOR_RED
-                bl      set_color
-
-                // Calculate seconds
+draw_freeze_charge:
                 mov     w0, w19
-                mov     w1, 60
-                udiv    w0, w0, w1
-                add     w0, w0, 1
+                mov     w1, FREEZE_COOLDOWN
+                bl      ability_charge
 
-                // Print cooldown number using write_num
-                bl      write_num
+draw_freeze_meter:
+                mov     w4, w1
+                mov     w3, w0
+                mov     w2, ABILITY_METER_SEGMENTS
+                mov     w0, ABILITY_FREEZE_X
+                mov     w1, ROW_BAR_ABILITIES
+                bl      fb_meter
 
-                // Print 's' suffix and padding to clear "READY"/"ACTIVE!" leftovers
-                mov     w0, 's'
-                bl      write_char
-                mov     w0, ' '
-                bl      write_char
-                mov     w0, ' '
-                bl      write_char
-                mov     w0, ' '
-                bl      write_char
-                mov     w0, ' '
-                bl      write_char
-                b       abilities_hud_done
+                mov     w0, ABILITY_FREEZE_X + ABILITY_METER_SEGMENTS + 3
+                mov     w1, ROW_BAR_ABILITIES
+                bl      cursor_move
 
-freeze_status_ready:
-                mov     w0, COLOR_GREEN
-                bl      set_color
-                adrp    x0, ability_hud_ready
-                add     x0, x0, :lo12:ability_hud_ready
-                bl      write_str
-                b       abilities_hud_done
-
-freeze_status_active:
-                // Freeze is active - show ACTIVE! in bright cyan
+                cbz     w20, draw_freeze_state
                 mov     w0, COLOR_BRIGHT_CYAN
                 bl      set_color
                 adrp    x0, ability_hud_active
                 add     x0, x0, :lo12:ability_hud_active
                 bl      write_str
+                b       abilities_hud_done
+
+draw_freeze_state:
+                mov     w0, w19
+                bl      ability_draw_state
 
 abilities_hud_done:
-                // Reset color
                 mov     w0, COLOR_RESET
                 bl      set_color
 
                 ldp     x21, x22, [sp, 32]
                 ldp     x19, x20, [sp, 16]
                 ldp     fp, lr, [sp], 48
+                ret
+
+// ability_charge - How much of a gauge a cooldown has given back
+// Parameters: w0 = frames left, w1 = the cooldown's full length
+// Returns: w0 = segments filled, w1 = colour for them
+ability_charge:
+                cbz     w0, ability_charge_full
+
+                sub     w2, w1, w0              // Frames already served
+                mov     w3, ABILITY_METER_SEGMENTS
+                mul     w2, w2, w3
+                udiv    w0, w2, w1
+                mov     w1, COLOR_BRIGHT_YELLOW
+                ret
+
+ability_charge_full:
+                mov     w0, ABILITY_METER_SEGMENTS
+                mov     w1, COLOR_BRIGHT_GREEN
+                ret
+
+// ability_draw_state - READY, or the seconds left, at the current position
+// Parameters: w0 = frames of cooldown left
+ability_draw_state:
+                stp     fp, lr, [sp, -32]!
+                mov     fp, sp
+                str     x19, [sp, 16]
+
+                mov     w19, w0
+                cbz     w19, ability_state_ready
+
+                mov     w0, COLOR_BRIGHT_BLACK
+                bl      set_color
+                mov     w0, w19
+                mov     w1, TARGET_FPS
+                udiv    w0, w0, w1
+                add     w0, w0, 1               // Round up to the next second
+                bl      write_num
+                mov     w0, 's'
+                bl      write_char
+                b       ability_state_done
+
+ability_state_ready:
+                mov     w0, COLOR_BRIGHT_GREEN
+                bl      set_color
+                adrp    x0, ability_hud_ready
+                add     x0, x0, :lo12:ability_hud_ready
+                bl      write_str
+
+ability_state_done:
+                ldr     x19, [sp, 16]
+                ldp     fp, lr, [sp], 32
                 ret
 

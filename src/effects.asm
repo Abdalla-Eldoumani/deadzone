@@ -1,12 +1,7 @@
-/* effects.asm - Visual Effects System
-    @Author - Abdalla Eldoumani
-    * Particle system for explosions and death effects
-    * Screen shake for impact feedback
-    * Floating damage numbers
-    * NOTE: This file is included by main.asm via m4
-*/
+// Visual effects: explosion particles, floating damage numbers, and the
+// screen shake that offsets everything drawn through effects_cursor_move.
 
-// ============== PARTICLE STRUCTURE (8 bytes) ==============
+// Particle structure (8 bytes)
 PARTICLE_X = 0                                  // X position (2 bytes, signed)
 PARTICLE_Y = 2                                  // Y position (2 bytes, signed)
 PARTICLE_VX = 4                                 // X velocity (1 byte, signed)
@@ -15,7 +10,7 @@ PARTICLE_LIFE = 6                               // Frames remaining (1 byte)
 PARTICLE_CHAR = 7                               // Character to display (1 byte)
 PARTICLE_SIZE = 8                               // Total structure size
 
-// ============== DAMAGE NUMBER STRUCTURE (8 bytes) ==============
+// Damage number structure (8 bytes)
 DMGNUM_X = 0                                    // X position (2 bytes)
 DMGNUM_Y = 2                                    // Y position (2 bytes)
 DMGNUM_VALUE = 4                                // Damage value (2 bytes)
@@ -23,20 +18,15 @@ DMGNUM_LIFE = 6                                 // Frames remaining (1 byte)
 DMGNUM_COLOR = 7                                // Color code (1 byte)
 DMGNUM_SIZE = 8                                 // Total structure size
 
-// ============== EFFECT LIMITS ==============
+// Effect limits
 MAX_PARTICLES = 128                             // Maximum particles
 MAX_DAMAGE_NUMS = 20                            // Maximum damage numbers
 
-// ============== PARTICLE CHARACTERS ==============
-// Characters used for explosion effects
-PARTICLE_CHARS: .byte '*', '.', '+', 'o', 'x', '\'', '`', ','
-
-// ============== PARTICLE LIFE/TIMING ==============
+// Particle life/timing
 PARTICLE_MAX_LIFE = 12                          // Frames particle lives
 DMGNUM_MAX_LIFE = 20                            // Frames damage number shows
 SHAKE_DURATION = 8                              // Frames of screen shake
 
-// ============== DATA SECTION ==============
                 .data
 
 // Particle pool (128 * 8 = 1024 bytes)
@@ -62,14 +52,11 @@ effect_color_runner: .word COLOR_CYAN
 effect_color_tank:   .word COLOR_RED
 effect_color_boss:   .word COLOR_BRIGHT_YELLOW
 
-// ============== TEXT SECTION ==============
                 .text
                 .balign 4
 
-// ============================================================================
 // effects_init - Initialize effects system
 // Clears all particle and damage number pools
-// ============================================================================
                 .global effects_init
 effects_init:
                 stp     fp, lr, [sp, -16]!
@@ -117,10 +104,8 @@ effects_init_shake:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // effects_update - Update all active effects
 // Updates particles, damage numbers, and screen shake
-// ============================================================================
                 .global effects_update
 effects_update:
                 stp     fp, lr, [sp, -16]!
@@ -133,10 +118,8 @@ effects_update:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // effects_update_particles - Update all particles
 // Moves particles and decreases life
-// ============================================================================
 effects_update_particles:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
@@ -196,10 +179,8 @@ update_particles_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // effects_update_dmgnums - Update floating damage numbers
 // Moves numbers upward and decreases life
-// ============================================================================
 effects_update_dmgnums:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
@@ -238,10 +219,8 @@ update_dmgnums_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // effects_update_shake - Update screen shake
 // Generates random offset and decays intensity
-// ============================================================================
 effects_update_shake:
                 stp     fp, lr, [sp, -16]!
                 mov     fp, sp
@@ -294,9 +273,7 @@ shake_done:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // effects_draw - Draw all active effects
-// ============================================================================
                 .global effects_draw
 effects_draw:
                 stp     fp, lr, [sp, -16]!
@@ -308,9 +285,7 @@ effects_draw:
                 ldp     fp, lr, [sp], 16
                 ret
 
-// ============================================================================
 // effects_draw_particles - Draw all active particles
-// ============================================================================
 effects_draw_particles:
                 stp     fp, lr, [sp, -48]!
                 mov     fp, sp
@@ -379,9 +354,7 @@ draw_particles_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // effects_draw_dmgnums - Draw floating damage numbers
-// ============================================================================
 effects_draw_dmgnums:
                 stp     fp, lr, [sp, -48]!
                 mov     fp, sp
@@ -446,18 +419,16 @@ draw_dmgnums_done:
                 ldp     fp, lr, [sp], 48
                 ret
 
-// ============================================================================
 // effects_cursor_move - Move cursor with screen shake applied
 // Parameters: w0 = x, w1 = y
-// ============================================================================
                 .global effects_cursor_move
 effects_cursor_move:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
                 stp     x19, x20, [sp, 16]
 
-                mov     w19, w0                   // Save X
-                mov     w20, w1                   // Save Y
+                mov     w19, w0
+                mov     w20, w1
 
                 // Add shake offset
                 adrp    x0, shake_offset_x
@@ -468,18 +439,20 @@ effects_cursor_move:
                 add     w19, w19, w2
                 add     w20, w20, w3
 
-                // Clamp to screen bounds
-                cmp     w19, 0
-                csel    w19, wzr, w19, lt
-                mov     w0, SCREEN_WIDTH
-                sub     w0, w0, 1
+                // Clamp inside the arena, not just inside the screen: a shake
+                // large enough to push a particle out of the field would
+                // otherwise scatter it across the marquee or the status bar.
+                mov     w0, PLAY_LEFT
+                cmp     w19, w0
+                csel    w19, w0, w19, lt
+                mov     w0, PLAY_RIGHT
                 cmp     w19, w0
                 csel    w19, w0, w19, gt
 
-                cmp     w20, 0
-                csel    w20, wzr, w20, lt
-                mov     w0, SCREEN_HEIGHT
-                sub     w0, w0, 1
+                mov     w0, PLAY_TOP
+                cmp     w20, w0
+                csel    w20, w0, w20, lt
+                mov     w0, PLAY_BOTTOM
                 cmp     w20, w0
                 csel    w20, w0, w20, gt
 
@@ -492,10 +465,8 @@ effects_cursor_move:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // effects_spawn_explosion - Spawn death explosion at position
 // Parameters: w0 = x, w1 = y, w2 = enemy_type
-// ============================================================================
                 .global effects_spawn_explosion
 effects_spawn_explosion:
                 stp     fp, lr, [sp, -48]!
@@ -503,8 +474,8 @@ effects_spawn_explosion:
                 stp     x19, x20, [sp, 16]
                 stp     x21, x22, [sp, 32]
 
-                mov     w19, w0                   // Save X
-                mov     w20, w1                   // Save Y
+                mov     w19, w0
+                mov     w20, w1
                 mov     w21, w2                   // Save type
 
                 // Spawn 6-8 particles
@@ -517,7 +488,7 @@ spawn_explosion_loop:
 
                 // Find free particle slot
                 bl      effects_find_free_particle
-                cbz     x0, spawn_explosion_done  // No free slot
+                cbz     x0, spawn_explosion_done
 
                 // Set position
                 strh    w19, [x0, PARTICLE_X]
@@ -572,15 +543,14 @@ spawn_explosion_done:
                 .data
 velocity_table_x: .byte  0,  1,  1,  1,  0, -1, -1, -1
 velocity_table_y: .byte -1, -1,  0,  1,  1,  1,  0, -1
-particle_chars_data: .byte '*', '.', '+', 'o', 'x', '\'', '`', ','
+// Quote and backtick numeric for the same m4 reason as PARTICLE_CHARS.
+particle_chars_data: .byte '*', '.', '+', 'o', 'x', 0x27, 0x60, ','
 
                 .text
                 .balign 4
 
-// ============================================================================
 // effects_find_free_particle - Find inactive particle slot
 // Returns: x0 = pointer to slot, or 0 if full
-// ============================================================================
 effects_find_free_particle:
                 adrp    x0, particle_pool
                 add     x0, x0, :lo12:particle_pool
@@ -595,23 +565,21 @@ find_particle_loop:
                 b       find_particle_loop
 
 find_particle_full:
-                mov     x0, 0                     // No free slot
+                mov     x0, 0
 
 find_particle_found:
                 ret
 
-// ============================================================================
 // effects_spawn_damage_num - Spawn floating damage number
 // Parameters: w0 = x, w1 = y, w2 = damage value
-// ============================================================================
                 .global effects_spawn_damage_num
 effects_spawn_damage_num:
                 stp     fp, lr, [sp, -32]!
                 mov     fp, sp
                 stp     x19, x20, [sp, 16]
 
-                mov     w19, w0                   // Save X
-                mov     w20, w1                   // Save Y
+                mov     w19, w0
+                mov     w20, w1
 
                 // Find free damage number slot
                 adrp    x0, dmgnum_pool
@@ -619,7 +587,7 @@ effects_spawn_damage_num:
                 mov     w3, MAX_DAMAGE_NUMS
 
 find_dmgnum_slot:
-                cbz     w3, spawn_dmgnum_done     // No free slot
+                cbz     w3, spawn_dmgnum_done
                 ldrb    w4, [x0, DMGNUM_LIFE]
                 cbz     w4, found_dmgnum_slot
                 add     x0, x0, DMGNUM_SIZE
@@ -648,10 +616,8 @@ spawn_dmgnum_done:
                 ldp     fp, lr, [sp], 32
                 ret
 
-// ============================================================================
 // effects_trigger_shake - Trigger screen shake effect
 // Parameters: w0 = intensity (1-3)
-// ============================================================================
                 .global effects_trigger_shake
 effects_trigger_shake:
                 adrp    x1, shake_intensity
@@ -664,19 +630,5 @@ effects_trigger_shake:
                 mov     w2, SHAKE_DURATION
                 str     w2, [x1, 4]
 
-                ret
-
-// ============================================================================
-// effects_get_shake_offset - Get current shake offset
-// Returns: w0 = x_offset, w1 = y_offset
-// ============================================================================
-                .global effects_get_shake_offset
-effects_get_shake_offset:
-                adrp    x0, shake_offset_x
-                add     x0, x0, :lo12:shake_offset_x
-                ldr     w0, [x0]
-                adrp    x1, shake_offset_y
-                add     x1, x1, :lo12:shake_offset_y
-                ldr     w1, [x1]
                 ret
 
