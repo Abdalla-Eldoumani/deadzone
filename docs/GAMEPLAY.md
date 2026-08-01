@@ -19,15 +19,33 @@ than last time.
 The gun fires on its own at whatever is nearest, so there is no aiming. All of
 the difficulty is positioning.
 
+## Reading the screen
+
+The arena is the boxed area under the marquee. Dim grey is scenery: the walls,
+the rubble on the floor, the two rules that bracket the status bar. Anything
+bright is something that matters.
+
+You are the white `@`. Take a hit and you flash red for a moment, then strobe
+amber for the second of invincibility that follows.
+
+The status bar along the bottom carries a twenty-segment health gauge -- green
+while it holds, amber as it goes, red at the end -- then `WAVE`, `KILLS` and
+`LEVEL`. The row under it is the two ability gauges: each fills back up as its
+cooldown runs down and reads `READY` when it is charged.
+
+A new wave announces itself with `W A V E n` across the middle of the field for
+about a second.
+
 ## Enemies
 
-| Type | Glyph | Health | Moves every | XP |
-|------|-------|--------|-------------|-----|
-| Zombie | `z` | 3 | 8 frames | 10 |
-| Runner | `r` | 1 | 4 frames | 15 |
-| Tank | `Z` | 10 | 12 frames | 50 |
+| Type | Glyph | Colour | Health | Moves every | XP |
+|------|-------|--------|--------|-------------|-----|
+| Zombie | `z` | dull red | 3 | 8 frames | 10 |
+| Runner | `r` | hot red | 1 | 4 frames | 15 |
+| Tank | `Z` | amber | 10 | 12 frames | 50 |
 
-Health is in hits at base damage. Everything walks straight at you.
+Health is in hits at base damage. Everything walks straight at you. The colours
+run up the heat scale, so the hotter it looks the harder it is to kill.
 
 Waves 1 and 2 are zombies only, waves 3 and 4 mix in runners, wave 5 and up can
 send anything. Wave 1 needs 5 kills to clear and each wave after needs 5 more.
@@ -46,7 +64,8 @@ Boss Slayer achievement.
 ## Levelling
 
 Reaching `(level + 1) * 50` XP levels you up: health refills, maximum health
-goes up by 10, and you pick one of three random upgrades.
+goes up by 10, and you pick one of three random upgrades from a framed panel in
+the middle of the field. Nothing moves until you press `1`, `2` or `3`.
 
 | Upgrade | Effect per level | Cap |
 |---------|------------------|-----|
@@ -59,8 +78,9 @@ goes up by 10, and you pick one of three random upgrades.
 
 ## Abilities
 
-Both are on cooldowns counted in frames at 30 fps, and the HUD on the bottom
-row shows `READY`, a countdown in seconds, or `ACTIVE!`.
+Both are on cooldowns counted in frames at 30 fps. Each has a ten-segment gauge
+on the status bar that fills as the cooldown runs down, with `READY`, the
+seconds left, or `ACTIVE` beside it.
 
 **Bomb** (space) kills every enemy on screen, drops an explosion at each one,
 pays 5 XP and a kill for each, shakes the screen and rings the bell. 20 second
