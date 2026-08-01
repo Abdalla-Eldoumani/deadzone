@@ -14,6 +14,7 @@
 // upgrade when you level, p pauses, q or escape quits. On the game
 // over screen r restarts and m goes back to the menu. Survive the
 // waves; the Titan turns up at wave 10. High scores and achievements
+// persist in data/deadzone.sav between runs.
 
 // One assembly unit: m4 pastes the modules in before GAS sees any of it,
 // and constants has to come first because the equates are positional.
